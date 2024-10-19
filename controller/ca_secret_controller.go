@@ -18,6 +18,7 @@ package controller
 
 import (
 	"context"
+	v1 "k8s.io/api/core/v1"
 
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -25,22 +26,15 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log"
 )
 
-// SecretReconciler reconciles a Secret object
-type SecretReconciler struct {
+// CASecretReconciler reconciles a CA Secret object
+type CASecretReconciler struct {
 	client.Client
 	Scheme *runtime.Scheme
 }
 
-// Reconcile is part of the main kubernetes reconciliation loop which aims to
-// move the current state of the cluster closer to the desired state.
-// TODO(user): Modify the Reconcile function to compare the state specified by
-// the Secret object against the actual cluster state, and then
-// perform operations to make the cluster state reflect the state specified by
-// the user.
-//
-// For more details, check Reconcile and its Result here:
-// - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.19.0/pkg/reconcile
-func (r *SecretReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+// +kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch;update;patch
+
+func (r *CASecretReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	_ = log.FromContext(ctx)
 
 	// TODO(user): your logic here
@@ -49,9 +43,8 @@ func (r *SecretReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 }
 
 // SetupWithManager sets up the controller with the Manager.
-func (r *SecretReconciler) SetupWithManager(mgr ctrl.Manager) error {
+func (r *CASecretReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
-		// Uncomment the following line adding a pointer to an instance of the controlled resource as an argument
-		// For().
+		For(&v1.Secret{}).
 		Complete(r)
 }

@@ -18,7 +18,6 @@ package controller
 
 import (
 	"context"
-	"path/filepath"
 	"testing"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -53,10 +52,7 @@ var _ = BeforeSuite(func() {
 	ctx, cancel = context.WithCancel(context.TODO())
 
 	By("bootstrapping test environment")
-	testEnv = &envtest.Environment{
-		CRDDirectoryPaths:     []string{filepath.Join("..", "..", "config", "crd", "bases")},
-		ErrorIfCRDPathMissing: false,
-	}
+	testEnv = &envtest.Environment{}
 
 	var err error
 	// cfg is defined in this file globally.
