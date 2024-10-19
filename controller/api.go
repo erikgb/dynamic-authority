@@ -1,5 +1,10 @@
 package controller
 
+import (
+	"k8s.io/apimachinery/pkg/types"
+	"sigs.k8s.io/controller-runtime"
+)
+
 const (
 	// DynamicAuthoritySecretLabel will - if set to "true" - make the dynamic
 	// authority CA controller inject and maintain a dynamic CA.
@@ -17,3 +22,15 @@ const (
 	// TLSCABundleKey is used as a data key in Secret resources to store a CA certificate bundle.
 	TLSCABundleKey = "ca-bundle.crt"
 )
+
+type Options struct {
+	CASecret types.NamespacedName
+}
+
+func SetupWithManager(mgr controllerruntime.Manager, opts Options) error {
+	return (&CASecretReconciler{
+		Client: mgr.GetClient(),
+		Scheme: mgr.GetScheme(),
+		Opts:   opts,
+	}).SetupWithManager(mgr)
+}

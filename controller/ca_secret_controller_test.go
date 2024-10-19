@@ -31,44 +31,18 @@ var _ = Describe("CA Secret Controller", func() {
 
 	BeforeEach(func() {
 		secret = &corev1.Secret{}
-		secret.Namespace = "default"
-		secret.GenerateName = "dynamic-ca-secret"
-		secret.Type = corev1.SecretTypeTLS
-		secret.Data = map[string][]byte{
-			corev1.TLSCertKey:       nil,
-			corev1.TLSPrivateKeyKey: nil,
-		}
+		secret.Namespace = caSecret.Namespace
+		secret.Name = caSecret.Name
 	})
 
-	JustBeforeEach(func() {
-		Expect(k8sClient.Create(ctx, secret)).To(Succeed())
-	})
-
-	Context("When creating a secret with matching label key/value", func() {
-		BeforeEach(func() {
-			secret.Labels = map[string]string{
-				DynamicAuthoritySecretLabel: "true",
-			}
-		})
-
-		It("should inject a new CA when certificate is invalid", func() {
-			Eventually(komega.Object(secret)).Should(
-				HaveField("Data", And(
-					HaveKeyWithValue(corev1.TLSCertKey, []byte("TODO CA cert")),
-					HaveKeyWithValue(corev1.TLSPrivateKeyKey, []byte("TODO CA cert key")),
-					HaveKeyWithValue(TLSCABundleKey, []byte("TODO CA bundle")),
-				)))
-		})
-	})
-
-	Context("When creating a secret without matching label key/value", func() {
-		It("should leave it alone", func() {
-			Consistently(komega.Object(secret)).Should(
-				HaveField("Data", And(
-					HaveKeyWithValue(corev1.TLSCertKey, []byte("")),
-					HaveKeyWithValue(corev1.TLSPrivateKeyKey, []byte("")),
-					Not(HaveKey(TLSCABundleKey)),
-				)))
-		})
+	It("should create a CA secret", func() {
+		Eventually(komega.Object(secret)).Should(
+			HaveField("Labels", HaveKeyWithValue(DynamicAuthoritySecretLabel, "true")))
+		Expect(secret.Type).To(Equal(corev1.SecretTypeTLS))
+		Expect(secret.Data).To(Equal(map[string][]byte{
+			corev1.TLSCertKey:       []byte("TODO CA cert"),
+			corev1.TLSPrivateKeyKey: []byte("TODO CA cert key"),
+			TLSCABundleKey:          []byte("TODO CA bundle"),
+		}))
 	})
 })

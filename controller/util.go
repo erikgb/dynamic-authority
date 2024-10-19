@@ -10,6 +10,12 @@ const (
 	fieldOwner = client.FieldOwner("cert-manager-dynamic-authority")
 )
 
+var byLabelFilter = func(key, value string) func(object client.Object) bool {
+	return func(object client.Object) bool {
+		return object.GetLabels()[key] == value
+	}
+}
+
 type applyConfiguration interface {
 	GetName() *string
 }
@@ -28,4 +34,15 @@ func (p applyPatch) Type() types.PatchType {
 
 func (p applyPatch) Data(_ client.Object) ([]byte, error) {
 	return json.Marshal(p.ac)
+}
+
+type errorIs func(err error) bool
+
+func ignoreErr(err error, is ...errorIs) error {
+	for _, f := range is {
+		if f(err) {
+			return nil
+		}
+	}
+	return err
 }

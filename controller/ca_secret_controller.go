@@ -18,9 +18,13 @@ package controller
 
 import (
 	"context"
+	"k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/types"
+	"sigs.k8s.io/controller-runtime/pkg/event"
+	"sigs.k8s.io/controller-runtime/pkg/handler"
+	"sigs.k8s.io/controller-runtime/pkg/source"
 
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	corev1ac "k8s.io/client-go/applyconfigurations/core/v1"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -34,22 +38,47 @@ import (
 type CASecretReconciler struct {
 	client.Client
 	Scheme *runtime.Scheme
+	Opts   Options
+
+	events chan event.GenericEvent
 }
 
-// +kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch;update;patch
+// SetupWithManager sets up the controller with the Manager.
+func (r *CASecretReconciler) SetupWithManager(mgr ctrl.Manager) error {
+	r.events = make(chan event.GenericEvent)
+	go func() {
+		r.events <- event.GenericEvent{}
+	}()
+
+	return ctrl.NewControllerManagedBy(mgr).
+		// TODO: Tune watch/cache
+		For(&corev1.Secret{}, builder.WithPredicates(predicate.NewPredicateFuncs(byLabelFilter(DynamicAuthoritySecretLabel, "true")))).
+		WatchesRawSource(source.Channel(r.events, handler.EnqueueRequestsFromMapFunc(func(context.Context, client.Object) []ctrl.Request {
+			return []ctrl.Request{{NamespacedName: r.Opts.CASecret}}
+		}))).
+		Complete(r)
+}
+
+// +kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch;create;patch
 
 func (r *CASecretReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	_ = log.FromContext(ctx)
+	return ctrl.Result{}, r.reconcileCASecret(ctx, req.NamespacedName)
+}
 
+func (r *CASecretReconciler) reconcileCASecret(ctx context.Context, name types.NamespacedName) error {
 	secret := &corev1.Secret{}
-	if err := r.Get(ctx, req.NamespacedName, secret); err != nil {
-		// Resource could have been deleted after reconcile request, and thus not found.
-		return ctrl.Result{}, ignoreErr(err, errors.IsNotFound)
+	if err := r.Get(ctx, name, secret); err != nil {
+		if !errors.IsNotFound(err) {
+			return err
+		}
+		secret.Namespace = name.Namespace
+		secret.Name = name.Name
 	}
 
 	// TODO: Check if secret is up-to-date
 	if len(secret.Data[corev1.TLSCertKey]) > 0 {
-		return ctrl.Result{}, nil
+		return nil
 	}
 
 	data := map[string][]byte{
@@ -57,22 +86,10 @@ func (r *CASecretReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		corev1.TLSPrivateKeyKey: []byte("TODO CA cert key"),
 		TLSCABundleKey:          []byte("TODO CA bundle"),
 	}
-	ac := corev1ac.Secret(req.Name, req.Namespace).
+	ac := corev1ac.Secret(secret.Name, secret.Namespace).
+		WithLabels(map[string]string{DynamicAuthoritySecretLabel: "true"}).
+		WithType(corev1.SecretTypeTLS).
 		WithData(data)
 
-	return ctrl.Result{}, r.Patch(ctx, secret, newApplyPatch(ac), client.ForceOwnership, fieldOwner)
-}
-
-// SetupWithManager sets up the controller with the Manager.
-func (r *CASecretReconciler) SetupWithManager(mgr ctrl.Manager) error {
-	return ctrl.NewControllerManagedBy(mgr).
-		// TODO: Tune watch/cache
-		For(&corev1.Secret{}, builder.WithPredicates(predicate.NewPredicateFuncs(byLabelFilter(DynamicAuthoritySecretLabel, "true")))).
-		Complete(r)
-}
-
-var byLabelFilter = func(key, value string) func(object client.Object) bool {
-	return func(object client.Object) bool {
-		return object.GetLabels()[key] == value
-	}
+	return r.Patch(ctx, secret, newApplyPatch(ac), client.ForceOwnership, fieldOwner)
 }
