@@ -17,28 +17,27 @@ limitations under the License.
 package controller
 
 import (
+	"bytes"
 	"context"
-	"k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/types"
-	"sigs.k8s.io/controller-runtime/pkg/event"
-	"sigs.k8s.io/controller-runtime/pkg/handler"
-	"sigs.k8s.io/controller-runtime/pkg/source"
 
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/types"
 	corev1ac "k8s.io/client-go/applyconfigurations/core/v1"
 	ctrl "sigs.k8s.io/controller-runtime"
-	"sigs.k8s.io/controller-runtime/pkg/builder"
+	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/event"
+	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/log"
-	"sigs.k8s.io/controller-runtime/pkg/predicate"
+	"sigs.k8s.io/controller-runtime/pkg/source"
 )
 
 // CASecretReconciler reconciles a CA Secret object
 type CASecretReconciler struct {
 	client.Client
-	Scheme *runtime.Scheme
-	Opts   Options
+	Cache cache.Cache
+	Opts  Options
 
 	events chan event.GenericEvent
 }
@@ -51,8 +50,14 @@ func (r *CASecretReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	}()
 
 	return ctrl.NewControllerManagedBy(mgr).
-		// TODO: Tune watch/cache
-		For(&corev1.Secret{}, builder.WithPredicates(predicate.NewPredicateFuncs(byLabelFilter(DynamicAuthoritySecretLabel, "true")))).
+		Named("ca_secret").
+		WatchesRawSource(
+			source.Kind(
+				r.Cache,
+				&corev1.Secret{},
+				&handler.TypedEnqueueRequestForObject[*corev1.Secret]{},
+			),
+		).
 		WatchesRawSource(source.Channel(r.events, handler.EnqueueRequestsFromMapFunc(func(context.Context, client.Object) []ctrl.Request {
 			return []ctrl.Request{{NamespacedName: r.Opts.CASecret}}
 		}))).
@@ -77,12 +82,15 @@ func (r *CASecretReconciler) reconcileCASecret(ctx context.Context, name types.N
 	}
 
 	// TODO: Check if secret is up-to-date
-	if len(secret.Data[corev1.TLSCertKey]) > 0 {
+	// Has valid cert + key
+	// Cert is included in CA bundle
+	dummyCert := []byte("TODO CA cert")
+	if bytes.Equal(secret.Data[corev1.TLSCertKey], dummyCert) {
 		return nil
 	}
 
 	data := map[string][]byte{
-		corev1.TLSCertKey:       []byte("TODO CA cert"),
+		corev1.TLSCertKey:       dummyCert,
 		corev1.TLSPrivateKeyKey: []byte("TODO CA cert key"),
 		TLSCABundleKey:          []byte("TODO CA bundle"),
 	}

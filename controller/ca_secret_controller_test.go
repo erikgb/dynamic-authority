@@ -31,18 +31,32 @@ var _ = Describe("CA Secret Controller", func() {
 
 	BeforeEach(func() {
 		secret = &corev1.Secret{}
-		secret.Namespace = caSecret.Namespace
-		secret.Name = caSecret.Name
+		secret.Namespace = caSecretNN.Namespace
+		secret.Name = caSecretNN.Name
 	})
 
-	It("should create a CA secret", func() {
-		Eventually(komega.Object(secret)).Should(
-			HaveField("Labels", HaveKeyWithValue(DynamicAuthoritySecretLabel, "true")))
-		Expect(secret.Type).To(Equal(corev1.SecretTypeTLS))
-		Expect(secret.Data).To(Equal(map[string][]byte{
+	It("should reconcile CA secret", func() {
+		assertCASecret(secret)
+
+		By("deleting the secret")
+		Expect(k8sClient.Delete(ctx, secret)).To(Succeed())
+		assertCASecret(secret)
+
+		By("updating the secret")
+		secret.Data[corev1.TLSCertKey] = []byte("foo")
+		Expect(k8sClient.Update(ctx, secret)).To(Succeed())
+		assertCASecret(secret)
+	})
+})
+
+func assertCASecret(secret *corev1.Secret) {
+	Eventually(komega.Object(secret)).Should(And(
+		HaveField("Labels", HaveKeyWithValue(DynamicAuthoritySecretLabel, "true")),
+		HaveField("Type", Equal(corev1.SecretTypeTLS)),
+		HaveField("Data", Equal(map[string][]byte{
 			corev1.TLSCertKey:       []byte("TODO CA cert"),
 			corev1.TLSPrivateKeyKey: []byte("TODO CA cert key"),
 			TLSCABundleKey:          []byte("TODO CA bundle"),
-		}))
-	})
-})
+		})),
+	))
+}

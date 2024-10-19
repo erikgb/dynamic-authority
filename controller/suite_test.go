@@ -18,12 +18,13 @@ package controller
 
 import (
 	"context"
-	"k8s.io/apimachinery/pkg/types"
 	"testing"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
+	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -44,7 +45,7 @@ var (
 	ctx       context.Context
 	cancel    context.CancelFunc
 
-	caSecret types.NamespacedName
+	caSecretNN types.NamespacedName
 )
 
 func TestControllers(t *testing.T) {
@@ -77,9 +78,9 @@ var _ = BeforeSuite(func() {
 	})
 	Expect(err).ToNot(HaveOccurred())
 
-	caSecret.Namespace = "default"
-	caSecret.Name = "ca-secret"
-	opts := Options{CASecret: caSecret}
+	setupForTest()
+
+	opts := Options{CASecret: caSecretNN}
 	err = SetupWithManager(k8sManager, opts)
 	Expect(err).ToNot(HaveOccurred())
 
@@ -88,8 +89,16 @@ var _ = BeforeSuite(func() {
 		err = k8sManager.Start(ctx)
 		Expect(err).ToNot(HaveOccurred(), "failed to run manager")
 	}()
-
 })
+
+func setupForTest() {
+	caSecretNs := &corev1.Namespace{}
+	caSecretNs.Name = "ca-secret-ns"
+	Expect(k8sClient.Create(ctx, caSecretNs)).To(Succeed())
+
+	caSecretNN.Namespace = caSecretNs.Name
+	caSecretNN.Name = "ca-secret"
+}
 
 var _ = AfterSuite(func() {
 	By("tearing down the test environment")

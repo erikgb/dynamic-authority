@@ -1,8 +1,12 @@
 package controller
 
 import (
+	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/cache"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 const (
@@ -28,9 +32,39 @@ type Options struct {
 }
 
 func SetupWithManager(mgr controllerruntime.Manager, opts Options) error {
+	namespacedCache, err := cache.New(mgr.GetConfig(), cache.Options{
+		HTTPClient:                  mgr.GetHTTPClient(),
+		Scheme:                      mgr.GetScheme(),
+		Mapper:                      mgr.GetRESTMapper(),
+		ReaderFailOnMissingInformer: true,
+		ByObject: map[client.Object]cache.ByObject{
+			&corev1.Secret{}: {
+				Namespaces: map[string]cache.Config{
+					opts.CASecret.Namespace: {},
+				},
+				Label: labels.SelectorFromSet(labels.Set{DynamicAuthoritySecretLabel: "true"}),
+			},
+		},
+	})
+	if err := mgr.Add(namespacedCache); err != nil {
+		return err
+	}
+
+	namespacedClient, err := client.New(mgr.GetConfig(), client.Options{
+		HTTPClient: mgr.GetHTTPClient(),
+		Scheme:     mgr.GetScheme(),
+		Mapper:     mgr.GetRESTMapper(),
+		Cache: &client.CacheOptions{
+			Reader: namespacedCache,
+		},
+	})
+	if err != nil {
+		return err
+	}
+
 	return (&CASecretReconciler{
-		Client: mgr.GetClient(),
-		Scheme: mgr.GetScheme(),
+		Client: namespacedClient,
+		Cache:  namespacedCache,
 		Opts:   opts,
 	}).SetupWithManager(mgr)
 }
