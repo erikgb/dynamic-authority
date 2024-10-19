@@ -13,4 +13,7 @@ const (
 	// object wants injection of dynamic CAs.  It takes the form of a reference to
 	// a Secret as name.
 	WantInjectFromSecretLabel = "cert-manager.io/inject-dynamic-ca-from-secret"
+
+	// TLSCABundleKey is used as a data key in Secret resources to store a CA certificate bundle.
+	TLSCABundleKey = "ca-bundle.crt"
 )

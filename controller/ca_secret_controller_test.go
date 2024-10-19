@@ -56,6 +56,7 @@ var _ = Describe("CA Secret Controller", func() {
 				HaveField("Data", And(
 					HaveKeyWithValue(corev1.TLSCertKey, []byte("TODO CA cert")),
 					HaveKeyWithValue(corev1.TLSPrivateKeyKey, []byte("TODO CA cert key")),
+					HaveKeyWithValue(TLSCABundleKey, []byte("TODO CA bundle")),
 				)))
 		})
 	})
@@ -66,6 +67,7 @@ var _ = Describe("CA Secret Controller", func() {
 				HaveField("Data", And(
 					HaveKeyWithValue(corev1.TLSCertKey, []byte("")),
 					HaveKeyWithValue(corev1.TLSPrivateKeyKey, []byte("")),
+					Not(HaveKey(TLSCABundleKey)),
 				)))
 		})
 	})

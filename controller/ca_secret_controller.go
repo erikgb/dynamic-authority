@@ -47,14 +47,17 @@ func (r *CASecretReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		return ctrl.Result{}, ignoreErr(err, errors.IsNotFound)
 	}
 
-	// TODO: Exit early if CA certificate present and up-to-date
+	// TODO: Check if secret is up-to-date
+	if len(secret.Data[corev1.TLSCertKey]) > 0 {
+		return ctrl.Result{}, nil
+	}
 
 	data := map[string][]byte{
 		corev1.TLSCertKey:       []byte("TODO CA cert"),
 		corev1.TLSPrivateKeyKey: []byte("TODO CA cert key"),
+		TLSCABundleKey:          []byte("TODO CA bundle"),
 	}
 	ac := corev1ac.Secret(req.Name, req.Namespace).
-		WithType(corev1.SecretTypeTLS).
 		WithData(data)
 
 	return ctrl.Result{}, r.Patch(ctx, secret, newApplyPatch(ac), client.ForceOwnership, fieldOwner)
@@ -65,7 +68,6 @@ func (r *CASecretReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		// TODO: Tune watch/cache
 		For(&corev1.Secret{}, builder.WithPredicates(predicate.NewPredicateFuncs(byLabelFilter(DynamicAuthoritySecretLabel, "true")))).
-		Named("ca-secret").
 		Complete(r)
 }
 
@@ -73,15 +75,4 @@ var byLabelFilter = func(key, value string) func(object client.Object) bool {
 	return func(object client.Object) bool {
 		return object.GetLabels()[key] == value
 	}
-}
-
-type errorIs func(err error) bool
-
-func ignoreErr(err error, is ...errorIs) error {
-	for _, f := range is {
-		if f(err) {
-			return nil
-		}
-	}
-	return err
 }
