@@ -18,12 +18,16 @@ package controller
 
 import (
 	"context"
-	v1 "k8s.io/api/core/v1"
 
+	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
+	corev1ac "k8s.io/client-go/applyconfigurations/core/v1"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
+	"sigs.k8s.io/controller-runtime/pkg/predicate"
 )
 
 // CASecretReconciler reconciles a CA Secret object
@@ -37,14 +41,47 @@ type CASecretReconciler struct {
 func (r *CASecretReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	_ = log.FromContext(ctx)
 
-	// TODO(user): your logic here
+	secret := &corev1.Secret{}
+	if err := r.Get(ctx, req.NamespacedName, secret); err != nil {
+		// Resource could have been deleted after reconcile request, and thus not found.
+		return ctrl.Result{}, ignoreErr(err, errors.IsNotFound)
+	}
 
-	return ctrl.Result{}, nil
+	// TODO: Exit early if CA certificate present and up-to-date
+
+	data := map[string][]byte{
+		corev1.TLSCertKey:       []byte("TODO CA cert"),
+		corev1.TLSPrivateKeyKey: []byte("TODO CA cert key"),
+	}
+	ac := corev1ac.Secret(req.Name, req.Namespace).
+		WithType(corev1.SecretTypeTLS).
+		WithData(data)
+
+	return ctrl.Result{}, r.Patch(ctx, secret, newApplyPatch(ac), client.ForceOwnership, fieldOwner)
 }
 
 // SetupWithManager sets up the controller with the Manager.
 func (r *CASecretReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&v1.Secret{}).
+		// TODO: Tune watch/cache
+		For(&corev1.Secret{}, builder.WithPredicates(predicate.NewPredicateFuncs(byLabelFilter(DynamicAuthoritySecretLabel, "true")))).
+		Named("ca-secret").
 		Complete(r)
+}
+
+var byLabelFilter = func(key, value string) func(object client.Object) bool {
+	return func(object client.Object) bool {
+		return object.GetLabels()[key] == value
+	}
+}
+
+type errorIs func(err error) bool
+
+func ignoreErr(err error, is ...errorIs) error {
+	for _, f := range is {
+		if f(err) {
+			return nil
+		}
+	}
+	return err
 }

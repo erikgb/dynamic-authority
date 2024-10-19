@@ -18,15 +18,55 @@ package controller
 
 import (
 	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
+
+	corev1 "k8s.io/api/core/v1"
+	"sigs.k8s.io/controller-runtime/pkg/envtest/komega"
 )
 
-var _ = Describe("Secret Controller", func() {
-	Context("When reconciling a resource", func() {
+var _ = Describe("CA Secret Controller", func() {
+	var (
+		secret *corev1.Secret
+	)
 
-		It("should successfully reconcile the resource", func() {
+	BeforeEach(func() {
+		secret = &corev1.Secret{}
+		secret.Namespace = "default"
+		secret.GenerateName = "dynamic-ca-secret"
+		secret.Type = corev1.SecretTypeTLS
+		secret.Data = map[string][]byte{
+			corev1.TLSCertKey:       nil,
+			corev1.TLSPrivateKeyKey: nil,
+		}
+	})
 
-			// TODO(user): Add more specific assertions depending on your controller's reconciliation logic.
-			// Example: If you expect a certain status condition after reconciliation, verify it here.
+	JustBeforeEach(func() {
+		Expect(k8sClient.Create(ctx, secret)).To(Succeed())
+	})
+
+	Context("When creating a secret with matching label key/value", func() {
+		BeforeEach(func() {
+			secret.Labels = map[string]string{
+				DynamicAuthoritySecretLabel: "true",
+			}
+		})
+
+		It("should inject a new CA when certificate is invalid", func() {
+			Eventually(komega.Object(secret)).Should(
+				HaveField("Data", And(
+					HaveKeyWithValue(corev1.TLSCertKey, []byte("TODO CA cert")),
+					HaveKeyWithValue(corev1.TLSPrivateKeyKey, []byte("TODO CA cert key")),
+				)))
+		})
+	})
+
+	Context("When creating a secret without matching label key/value", func() {
+		It("should leave it alone", func() {
+			Consistently(komega.Object(secret)).Should(
+				HaveField("Data", And(
+					HaveKeyWithValue(corev1.TLSCertKey, []byte("")),
+					HaveKeyWithValue(corev1.TLSPrivateKeyKey, []byte("")),
+				)))
 		})
 	})
 })
