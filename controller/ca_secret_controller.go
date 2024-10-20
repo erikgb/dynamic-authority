@@ -3,14 +3,12 @@ package controller
 import (
 	"bytes"
 	"context"
-	"sigs.k8s.io/controller-runtime/pkg/predicate"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/types"
 	corev1ac "k8s.io/client-go/applyconfigurations/core/v1"
 	ctrl "sigs.k8s.io/controller-runtime"
-	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
@@ -20,10 +18,7 @@ import (
 
 // CASecretReconciler reconciles a CA Secret object
 type CASecretReconciler struct {
-	client.Client
-	Cache cache.Cache
-	Opts  Options
-
+	reconciler
 	events chan event.GenericEvent
 }
 
@@ -38,16 +33,7 @@ func (r *CASecretReconciler) SetupWithManager(mgr ctrl.Manager) error {
 
 	return ctrl.NewControllerManagedBy(mgr).
 		Named("ca_secret").
-		WatchesRawSource(
-			source.Kind(
-				r.Cache,
-				&corev1.Secret{},
-				&handler.TypedEnqueueRequestForObject[*corev1.Secret]{},
-				predicate.NewTypedPredicateFuncs[*corev1.Secret](func(obj *corev1.Secret) bool {
-					return obj.Namespace == r.Opts.CASecret.Namespace && obj.Name == r.Opts.CASecret.Name
-				}),
-			),
-		).
+		WatchesRawSource(r.caSecretSource()).
 		WatchesRawSource(
 			source.Channel(
 				r.events,

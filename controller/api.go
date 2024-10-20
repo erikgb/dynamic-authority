@@ -85,17 +85,14 @@ func SetupWithManager(mgr controllerruntime.Manager, opts Options) error {
 		return err
 	}
 
+	reconciler := reconciler{
+		Client: controllerClient,
+		Cache:  controllerCache,
+		Opts:   opts,
+	}
 	controllers := []DynamicAuthorityController{
-		&CASecretReconciler{
-			Client: controllerClient,
-			Cache:  controllerCache,
-			Opts:   opts,
-		},
-		&InjectableReconciler{
-			Client: controllerClient,
-			Cache:  controllerCache,
-			Opts:   opts,
-		},
+		&CASecretReconciler{reconciler: reconciler},
+		&InjectableReconciler{reconciler: reconciler},
 	}
 	for _, c := range controllers {
 		if err := c.SetupWithManager(mgr); err != nil {

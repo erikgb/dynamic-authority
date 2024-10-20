@@ -37,9 +37,11 @@ var _ = Describe("CA Secret Controller", Ordered, func() {
 		Expect(err).ToNot(HaveOccurred())
 
 		controller := &CASecretReconciler{
-			Client: k8sManager.GetClient(),
-			Cache:  k8sManager.GetCache(),
-			Opts:   Options{CASecret: caSecret},
+			reconciler: reconciler{
+				Client: k8sManager.GetClient(),
+				Cache:  k8sManager.GetCache(),
+				Opts:   Options{CASecret: caSecret},
+			},
 		}
 		Expect(controller.SetupWithManager(k8sManager)).To(Succeed())
 

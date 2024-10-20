@@ -7,35 +7,22 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	admissionregistrationv1ac "k8s.io/client-go/applyconfigurations/admissionregistration/v1"
 	ctrl "sigs.k8s.io/controller-runtime"
-	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/log"
-	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 )
 
 // InjectableReconciler injects CA bundle into resources
 type InjectableReconciler struct {
-	client.Client
-	Cache cache.Cache
-	Opts  Options
+	reconciler
 }
 
 // SetupWithManager sets up the controllers with the Manager.
 func (r *InjectableReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
-		WatchesRawSource(
-			source.Kind(
-				r.Cache,
-				&corev1.Secret{},
-				&handler.TypedEnqueueRequestForObject[*corev1.Secret]{},
-				predicate.NewTypedPredicateFuncs[*corev1.Secret](func(obj *corev1.Secret) bool {
-					return obj.Namespace == r.Opts.CASecret.Namespace && obj.Name == r.Opts.CASecret.Name
-				}),
-			),
-		).
 		Named("validating_webhook_configuration_ca_inject").
+		WatchesRawSource(r.caSecretSource()).
 		WatchesRawSource(
 			source.Kind(
 				r.Cache,

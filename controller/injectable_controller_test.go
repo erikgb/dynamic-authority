@@ -22,7 +22,7 @@ var _ = Describe("Injectable Controller", Ordered, func() {
 	)
 
 	BeforeAll(func() {
-		caBundle = []byte("TODO CA bundle")
+		caBundle = []byte("TODO CA bundle injectable")
 
 		ns := &corev1.Namespace{}
 		ns.Name = "injectable-controller"
@@ -36,8 +36,8 @@ var _ = Describe("Injectable Controller", Ordered, func() {
 			DynamicAuthoritySecretLabel: "true",
 		}
 		secret.Data = map[string][]byte{
-			corev1.TLSCertKey:       []byte("TODO CA cert"),
-			corev1.TLSPrivateKeyKey: []byte("TODO CA cert key"),
+			corev1.TLSCertKey:       []byte("TODO CA cert injectable"),
+			corev1.TLSPrivateKeyKey: []byte("TODO CA cert key injectable"),
 			TLSCABundleKey:          caBundle,
 		}
 		Expect(k8sClient.Create(ctx, secret)).To(Succeed())
@@ -52,9 +52,11 @@ var _ = Describe("Injectable Controller", Ordered, func() {
 		Expect(err).ToNot(HaveOccurred())
 
 		controller := &InjectableReconciler{
-			Client: k8sManager.GetClient(),
-			Cache:  k8sManager.GetCache(),
-			Opts:   Options{CASecret: caSecret},
+			reconciler: reconciler{
+				Client: k8sManager.GetClient(),
+				Cache:  k8sManager.GetCache(),
+				Opts:   Options{CASecret: caSecret},
+			},
 		}
 		Expect(controller.SetupWithManager(k8sManager)).To(Succeed())
 
