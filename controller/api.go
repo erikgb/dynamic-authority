@@ -1,8 +1,10 @@
 package controller
 
 import (
+	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/apimachinery/pkg/selection"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -41,6 +43,15 @@ type DynamicAuthorityController interface {
 }
 
 func SetupWithManager(mgr controllerruntime.Manager, opts Options) error {
+	var injectableRequirements []labels.Requirement
+	for _, k := range []string{WantInjectFromSecretNamespaceLabel, WantInjectFromSecretNameLabel} {
+		r, err := labels.NewRequirement(k, selection.Exists, nil)
+		if err != nil {
+			return err
+		}
+		injectableRequirements = append(injectableRequirements, *r)
+	}
+
 	controllerCache, err := cache.New(mgr.GetConfig(), cache.Options{
 		HTTPClient:                  mgr.GetHTTPClient(),
 		Scheme:                      mgr.GetScheme(),
@@ -52,6 +63,9 @@ func SetupWithManager(mgr controllerruntime.Manager, opts Options) error {
 					opts.CASecret.Namespace: {},
 				},
 				Label: labels.SelectorFromSet(labels.Set{DynamicAuthoritySecretLabel: "true"}),
+			},
+			&admissionregistrationv1.ValidatingWebhookConfiguration{}: {
+				Label: labels.NewSelector().Add(injectableRequirements...),
 			},
 		},
 	})

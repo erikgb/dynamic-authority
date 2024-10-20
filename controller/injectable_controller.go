@@ -11,6 +11,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/log"
+	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 )
 
@@ -29,6 +30,9 @@ func (r *InjectableReconciler) SetupWithManager(mgr ctrl.Manager) error {
 				r.Cache,
 				&corev1.Secret{},
 				&handler.TypedEnqueueRequestForObject[*corev1.Secret]{},
+				predicate.NewTypedPredicateFuncs[*corev1.Secret](func(obj *corev1.Secret) bool {
+					return obj.Namespace == r.Opts.CASecret.Namespace && obj.Name == r.Opts.CASecret.Name
+				}),
 			),
 		).
 		Named("validating_webhook_configuration_ca_inject").
