@@ -7,7 +7,6 @@ import (
 	"crypto/rand"
 	"crypto/x509"
 	"crypto/x509/pkix"
-	"math/big"
 	"time"
 
 	"github.com/erikgb/dynamic-authority/controller/pki"
@@ -17,47 +16,30 @@ import (
 	corev1ac "k8s.io/client-go/applyconfigurations/core/v1"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/event"
-	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/log"
-	"sigs.k8s.io/controller-runtime/pkg/source"
 )
 
-// CASecretReconciler reconciles a CA Secret object
-type CASecretReconciler struct {
+// LeafCertSecretReconciler reconciles a leaf certificate Secret object
+type LeafCertSecretReconciler struct {
 	reconciler
-	events chan event.GenericEvent
 }
 
 // +kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch;create;patch
 
 // SetupWithManager sets up the controller with the Manager.
-func (r *CASecretReconciler) SetupWithManager(mgr ctrl.Manager) error {
-	r.events = make(chan event.GenericEvent)
-	go func() {
-		r.events <- event.GenericEvent{}
-	}()
-
+func (r *LeafCertSecretReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
-		Named("ca_secret").
-		WatchesRawSource(r.caSecretSource()).
-		WatchesRawSource(
-			source.Channel(
-				r.events,
-				handler.EnqueueRequestsFromMapFunc(func(context.Context, client.Object) []ctrl.Request {
-					return []ctrl.Request{{NamespacedName: r.Opts.CASecret}}
-				}),
-			),
-		).
+		Named("leaf_cert_secret").
+		WatchesRawSource(r.secretSource(r.Opts.LeafSecret)).
 		Complete(r)
 }
 
-func (r *CASecretReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+func (r *LeafCertSecretReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	_ = log.FromContext(ctx)
-	return ctrl.Result{}, r.reconcileCASecret(ctx, req.NamespacedName)
+	return ctrl.Result{}, r.reconcileSecret(ctx, req.NamespacedName)
 }
 
-func (r *CASecretReconciler) reconcileCASecret(ctx context.Context, name types.NamespacedName) error {
+func (r *LeafCertSecretReconciler) reconcileSecret(ctx context.Context, name types.NamespacedName) error {
 	secret := &corev1.Secret{}
 	if err := r.Get(ctx, name, secret); err != nil {
 		if !errors.IsNotFound(err) {
@@ -70,12 +52,11 @@ func (r *CASecretReconciler) reconcileCASecret(ctx context.Context, name types.N
 
 	// TODO: Check if secret is up-to-date
 	// Has valid cert + key
-	// Cert is included in CA bundle
 	if !bytes.Equal(secret.Data[TLSCABundleKey], secret.Data[corev1.TLSCertKey]) {
 		return nil
 	}
 
-	cert, pk, err := r.regenerateCA()
+	cert, pk, err := r.regenerateCertificate()
 	if err != nil {
 		return err
 	}
@@ -103,12 +84,10 @@ func (r *CASecretReconciler) reconcileCASecret(ctx context.Context, name types.N
 	return r.Patch(ctx, secret, newApplyPatch(ac), client.ForceOwnership, fieldOwner)
 }
 
-var serialNumberLimit = new(big.Int).Lsh(big.NewInt(1), 128)
-
-// regenerateCA will regenerate and store a new CA.
+// generateCA will regenerate and store a new CA.
 // If the provided Secret is nil, a new secret resource will be Created.
 // Otherwise, the provided resource will be modified and Updated.
-func (d *CASecretReconciler) regenerateCA() (*x509.Certificate, *ecdsa.PrivateKey, error) {
+func (d *LeafCertSecretReconciler) regenerateCertificate() (*x509.Certificate, *ecdsa.PrivateKey, error) {
 	pk, err := pki.GenerateECPrivateKey(384)
 	if err != nil {
 		return nil, nil, err

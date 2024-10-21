@@ -6,7 +6,6 @@ import (
 	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/labels"
-	"k8s.io/apimachinery/pkg/selection"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -37,8 +36,20 @@ const (
 )
 
 type Options struct {
-	CASecret   types.NamespacedName
+	// The namespaced name of the Secret used to store CA certificates.
+	CASecret types.NamespacedName
+
+	// The namespaced name of the Secret used to leaf certificates.
+	LeafSecret types.NamespacedName
+
+	// The amount of time the root CA certificate will be valid for.
+	// This must be greater than LeafDuration.
 	CADuration time.Duration
+
+	// The amount of time leaf certificates signed by this authority will be
+	// valid for.
+	// This must be less than CADuration.
+	LeafDuration time.Duration
 }
 
 type DynamicAuthorityController interface {
@@ -46,15 +57,6 @@ type DynamicAuthorityController interface {
 }
 
 func SetupWithManager(mgr controllerruntime.Manager, opts Options) error {
-	var injectableRequirements []labels.Requirement
-	for _, k := range []string{WantInjectFromSecretNamespaceLabel, WantInjectFromSecretNameLabel} {
-		r, err := labels.NewRequirement(k, selection.Exists, nil)
-		if err != nil {
-			return err
-		}
-		injectableRequirements = append(injectableRequirements, *r)
-	}
-
 	controllerCache, err := cache.New(mgr.GetConfig(), cache.Options{
 		HTTPClient:                  mgr.GetHTTPClient(),
 		Scheme:                      mgr.GetScheme(),
@@ -65,10 +67,15 @@ func SetupWithManager(mgr controllerruntime.Manager, opts Options) error {
 				Namespaces: map[string]cache.Config{
 					opts.CASecret.Namespace: {},
 				},
-				Label: labels.SelectorFromSet(labels.Set{DynamicAuthoritySecretLabel: "true"}),
+				Label: labels.SelectorFromSet(labels.Set{
+					DynamicAuthoritySecretLabel: "true",
+				}),
 			},
 			&admissionregistrationv1.ValidatingWebhookConfiguration{}: {
-				Label: labels.NewSelector().Add(injectableRequirements...),
+				Label: labels.SelectorFromSet(labels.Set{
+					WantInjectFromSecretNamespaceLabel: opts.CASecret.Namespace,
+					WantInjectFromSecretNameLabel:      opts.CASecret.Name,
+				}),
 			},
 		},
 	})

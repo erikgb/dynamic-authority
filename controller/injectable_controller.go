@@ -22,7 +22,7 @@ type InjectableReconciler struct {
 func (r *InjectableReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		Named("validating_webhook_configuration_ca_inject").
-		WatchesRawSource(r.caSecretSource()).
+		WatchesRawSource(r.secretSource(r.Opts.CASecret)).
 		WatchesRawSource(
 			source.Kind(
 				r.Cache,
