@@ -1,8 +1,10 @@
 package controller
 
 import (
+	"github.com/erikgb/dynamic-authority/controller/pki"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"time"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -40,7 +42,7 @@ var _ = Describe("CA Secret Controller", Ordered, func() {
 			reconciler: reconciler{
 				Client: k8sManager.GetClient(),
 				Cache:  k8sManager.GetCache(),
-				Opts:   Options{CASecret: caSecret},
+				Opts:   Options{CASecret: caSecret, CADuration: 7 * 24 * time.Hour},
 			},
 		}
 		Expect(controller.SetupWithManager(k8sManager)).To(Succeed())
@@ -82,10 +84,21 @@ func assertCASecret(secret *corev1.Secret) {
 	Eventually(komega.Object(secret)).Should(And(
 		HaveField("Labels", HaveKeyWithValue(DynamicAuthoritySecretLabel, "true")),
 		HaveField("Type", Equal(corev1.SecretTypeTLS)),
-		HaveField("Data", Equal(map[string][]byte{
-			corev1.TLSCertKey:       []byte("TODO CA cert"),
-			corev1.TLSPrivateKeyKey: []byte("TODO CA cert key"),
-			TLSCABundleKey:          []byte("TODO CA bundle"),
-		})),
+		HaveField("Data", And(
+			HaveKeyWithValue(corev1.TLSCertKey, Not(BeEmpty())),
+			HaveKeyWithValue(corev1.TLSPrivateKeyKey, Not(BeEmpty())),
+			HaveKeyWithValue(TLSCABundleKey, Not(BeEmpty())),
+		)),
 	))
+
+	cert, err := pki.DecodeX509CertificateBytes(secret.Data[corev1.TLSCertKey])
+	Expect(err).ToNot(HaveOccurred())
+	pk, err := pki.DecodePrivateKeyBytes(secret.Data[corev1.TLSPrivateKeyKey])
+	Expect(err).ToNot(HaveOccurred())
+	caBundle, err := pki.DecodeX509CertificateSetBytes(secret.Data[TLSCABundleKey])
+	Expect(err).ToNot(HaveOccurred())
+
+	Expect(cert.PublicKey).To(Equal(pk.Public()))
+	Expect(cert.Subject).To(Equal(cert.Issuer))
+	Expect(caBundle).To(ContainElement(cert))
 }

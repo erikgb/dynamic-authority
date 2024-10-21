@@ -3,7 +3,14 @@ package controller
 import (
 	"bytes"
 	"context"
+	"crypto/ecdsa"
+	"crypto/rand"
+	"crypto/x509"
+	"crypto/x509/pkix"
+	"math/big"
+	"time"
 
+	"github.com/erikgb/dynamic-authority/controller/pki"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/types"
@@ -64,15 +71,29 @@ func (r *CASecretReconciler) reconcileCASecret(ctx context.Context, name types.N
 	// TODO: Check if secret is up-to-date
 	// Has valid cert + key
 	// Cert is included in CA bundle
-	dummyCert := []byte("TODO CA cert")
-	if bytes.Equal(secret.Data[corev1.TLSCertKey], dummyCert) {
+	if !bytes.Equal(secret.Data[TLSCABundleKey], secret.Data[corev1.TLSCertKey]) {
 		return nil
 	}
 
+	cert, pk, err := r.regenerateCA()
+	if err != nil {
+		return err
+	}
+
+	certBytes, err := pki.EncodeX509(cert)
+	if err != nil {
+		return err
+	}
+	pkBytes, err := pki.EncodePKCS8PrivateKey(pk)
+	if err != nil {
+		return err
+	}
+
 	data := map[string][]byte{
-		corev1.TLSCertKey:       dummyCert,
-		corev1.TLSPrivateKeyKey: []byte("TODO CA cert key"),
-		TLSCABundleKey:          []byte("TODO CA bundle"),
+		corev1.TLSCertKey:       certBytes,
+		corev1.TLSPrivateKeyKey: pkBytes,
+		// TODO: Reconcile CA bundle correctly
+		TLSCABundleKey: certBytes,
 	}
 	ac := corev1ac.Secret(secret.Name, secret.Namespace).
 		WithLabels(map[string]string{DynamicAuthoritySecretLabel: "true"}).
@@ -80,4 +101,38 @@ func (r *CASecretReconciler) reconcileCASecret(ctx context.Context, name types.N
 		WithData(data)
 
 	return r.Patch(ctx, secret, newApplyPatch(ac), client.ForceOwnership, fieldOwner)
+}
+
+var serialNumberLimit = new(big.Int).Lsh(big.NewInt(1), 128)
+
+// regenerateCA will regenerate and store a new CA.
+// If the provided Secret is nil, a new secret resource will be Created.
+// Otherwise, the provided resource will be modified and Updated.
+func (d *CASecretReconciler) regenerateCA() (*x509.Certificate, *ecdsa.PrivateKey, error) {
+	pk, err := pki.GenerateECPrivateKey(384)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	serialNumber, err := rand.Int(rand.Reader, serialNumberLimit)
+	if err != nil {
+		return nil, nil, err
+	}
+	cert := &x509.Certificate{
+		Version:               3,
+		BasicConstraintsValid: true,
+		SerialNumber:          serialNumber,
+		PublicKeyAlgorithm:    x509.ECDSA,
+		Subject: pkix.Name{
+			CommonName: "cert-manager-dynamic-ca",
+		},
+		IsCA:      true,
+		NotBefore: time.Now(),
+		NotAfter:  time.Now().Add(d.Opts.CADuration),
+		KeyUsage:  x509.KeyUsageDigitalSignature | x509.KeyUsageKeyEncipherment | x509.KeyUsageCertSign,
+	}
+	// self sign the root CA
+	_, cert, err = pki.SignCertificate(cert, cert, pk.Public(), pk)
+
+	return cert, pk, err
 }

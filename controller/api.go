@@ -1,6 +1,8 @@
 package controller
 
 import (
+	"time"
+
 	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/labels"
@@ -35,7 +37,8 @@ const (
 )
 
 type Options struct {
-	CASecret types.NamespacedName
+	CASecret   types.NamespacedName
+	CADuration time.Duration
 }
 
 type DynamicAuthorityController interface {
