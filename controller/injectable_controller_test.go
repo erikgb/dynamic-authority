@@ -64,7 +64,7 @@ var _ = Describe("Injectable Controller", Ordered, func() {
 	})
 
 	It("should inject CA bundle into VWC", func() {
-		vwc := newValidatingWebhookConfigurationForTest("test-vwc", caSecretRef)
+		vwc := NewValidatingWebhookConfigurationForTest("test-vwc", caSecretRef)
 		Expect(k8sClient.Create(ctx, vwc)).To(Succeed())
 
 		Eventually(komega.Object(vwc)).Should(

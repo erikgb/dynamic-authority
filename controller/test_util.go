@@ -34,7 +34,7 @@ func assertCASecret(secret *corev1.Secret) {
 	Expect(caBundle).To(ContainElement(cert))
 }
 
-func newValidatingWebhookConfigurationForTest(name string, caSecret types.NamespacedName) *admissionregistrationv1.ValidatingWebhookConfiguration {
+func NewValidatingWebhookConfigurationForTest(name string, caSecret types.NamespacedName) *admissionregistrationv1.ValidatingWebhookConfiguration {
 	vwc := &admissionregistrationv1.ValidatingWebhookConfiguration{}
 	vwc.Name = name
 	vwc.Labels = map[string]string{
