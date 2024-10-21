@@ -39,7 +39,7 @@ func (r *CASecretReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	}()
 
 	return ctrl.NewControllerManagedBy(mgr).
-		Named("ca_secret").
+		Named("cert_ca_secret").
 		WatchesRawSource(r.secretSource(r.Opts.CASecret)).
 		WatchesRawSource(
 			source.Channel(

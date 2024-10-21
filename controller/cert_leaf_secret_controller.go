@@ -16,7 +16,10 @@ import (
 	corev1ac "k8s.io/client-go/applyconfigurations/core/v1"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/log"
+	"sigs.k8s.io/controller-runtime/pkg/predicate"
+	"sigs.k8s.io/controller-runtime/pkg/source"
 )
 
 // LeafCertSecretReconciler reconciles a leaf certificate Secret object
@@ -29,8 +32,17 @@ type LeafCertSecretReconciler struct {
 // SetupWithManager sets up the controller with the Manager.
 func (r *LeafCertSecretReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
-		Named("leaf_cert_secret").
+		Named("cert_leaf_secret").
 		WatchesRawSource(r.secretSource(r.Opts.LeafSecret)).
+		WatchesRawSource(source.Kind(
+			r.Cache,
+			&corev1.Secret{},
+			handler.TypedEnqueueRequestsFromMapFunc(func(ctx context.Context, obj *corev1.Secret) []ctrl.Request {
+				return []ctrl.Request{{NamespacedName: r.Opts.LeafSecret}}
+			}),
+			predicate.NewTypedPredicateFuncs[*corev1.Secret](func(obj *corev1.Secret) bool {
+				return obj.Namespace == r.Opts.CASecret.Namespace && obj.Name == r.Opts.CASecret.Name
+			}))).
 		Complete(r)
 }
 
