@@ -109,7 +109,7 @@ func (r *CASecretReconciler) reconcileSecret(ctx context.Context, name types.Nam
 var serialNumberLimit = new(big.Int).Lsh(big.NewInt(1), 128)
 
 // generateCA will regenerate a new CA.
-func (d *CASecretReconciler) generateCA() (*x509.Certificate, *ecdsa.PrivateKey, error) {
+func (r *CASecretReconciler) generateCA() (*x509.Certificate, *ecdsa.PrivateKey, error) {
 	pk, err := pki.GenerateECPrivateKey(384)
 	if err != nil {
 		return nil, nil, err
@@ -129,7 +129,7 @@ func (d *CASecretReconciler) generateCA() (*x509.Certificate, *ecdsa.PrivateKey,
 		},
 		IsCA:      true,
 		NotBefore: time.Now(),
-		NotAfter:  time.Now().Add(d.Opts.CADuration),
+		NotAfter:  time.Now().Add(r.Opts.CADuration),
 		KeyUsage:  x509.KeyUsageDigitalSignature | x509.KeyUsageKeyEncipherment | x509.KeyUsageCertSign,
 	}
 	// self sign the root CA

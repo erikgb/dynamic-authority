@@ -102,7 +102,7 @@ func (r *LeafCertSecretReconciler) reconcileSecret(ctx context.Context, name typ
 // generateCA will regenerate and store a new CA.
 // If the provided Secret is nil, a new secret resource will be Created.
 // Otherwise, the provided resource will be modified and Updated.
-func (d *LeafCertSecretReconciler) regenerateCertificate() (*x509.Certificate, *ecdsa.PrivateKey, error) {
+func (r *LeafCertSecretReconciler) regenerateCertificate() (*x509.Certificate, *ecdsa.PrivateKey, error) {
 	pk, err := pki.GenerateECPrivateKey(384)
 	if err != nil {
 		return nil, nil, err
@@ -122,7 +122,7 @@ func (d *LeafCertSecretReconciler) regenerateCertificate() (*x509.Certificate, *
 		},
 		IsCA:      true,
 		NotBefore: time.Now(),
-		NotAfter:  time.Now().Add(d.Opts.CADuration),
+		NotAfter:  time.Now().Add(r.Opts.CADuration),
 		KeyUsage:  x509.KeyUsageDigitalSignature | x509.KeyUsageKeyEncipherment | x509.KeyUsageCertSign,
 	}
 	// self sign the root CA
