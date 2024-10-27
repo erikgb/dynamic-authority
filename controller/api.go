@@ -6,7 +6,6 @@ import (
 	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/labels"
-	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
@@ -36,11 +35,14 @@ const (
 )
 
 type Options struct {
-	// The namespaced name of the Secret used to store CA certificates.
-	CASecret types.NamespacedName
+	// The namespace used for certificate secrets.
+	Namespace string
 
-	// The namespaced name of the Secret used to leaf certificates.
-	LeafSecret types.NamespacedName
+	// The name of the Secret used to store CA certificates.
+	CASecret string
+
+	// The name of the Secret used to store leaf certificates.
+	LeafSecret string
 
 	// The amount of time the root CA certificate will be valid for.
 	// This must be greater than LeafDuration.
@@ -65,7 +67,7 @@ func SetupWithManager(mgr controllerruntime.Manager, opts Options) error {
 		ByObject: map[client.Object]cache.ByObject{
 			&corev1.Secret{}: {
 				Namespaces: map[string]cache.Config{
-					opts.CASecret.Namespace: {},
+					opts.Namespace: {},
 				},
 				Label: labels.SelectorFromSet(labels.Set{
 					DynamicAuthoritySecretLabel: "true",
@@ -73,8 +75,8 @@ func SetupWithManager(mgr controllerruntime.Manager, opts Options) error {
 			},
 			&admissionregistrationv1.ValidatingWebhookConfiguration{}: {
 				Label: labels.SelectorFromSet(labels.Set{
-					WantInjectFromSecretNamespaceLabel: opts.CASecret.Namespace,
-					WantInjectFromSecretNameLabel:      opts.CASecret.Name,
+					WantInjectFromSecretNamespaceLabel: opts.Namespace,
+					WantInjectFromSecretNameLabel:      opts.CASecret,
 				}),
 			},
 		},

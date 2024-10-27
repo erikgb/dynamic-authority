@@ -38,10 +38,13 @@ func (r *LeafCertSecretReconciler) SetupWithManager(mgr ctrl.Manager) error {
 			r.Cache,
 			&corev1.Secret{},
 			handler.TypedEnqueueRequestsFromMapFunc(func(ctx context.Context, obj *corev1.Secret) []ctrl.Request {
-				return []ctrl.Request{{NamespacedName: r.Opts.LeafSecret}}
+				return []ctrl.Request{{NamespacedName: types.NamespacedName{
+					Namespace: r.Opts.Namespace,
+					Name:      r.Opts.LeafSecret,
+				}}}
 			}),
 			predicate.NewTypedPredicateFuncs[*corev1.Secret](func(obj *corev1.Secret) bool {
-				return obj.Namespace == r.Opts.CASecret.Namespace && obj.Name == r.Opts.CASecret.Name
+				return obj.Name == r.Opts.CASecret
 			}))).
 		Complete(r)
 }

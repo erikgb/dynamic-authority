@@ -51,9 +51,10 @@ var _ = Describe("Injectable Controller", Ordered, func() {
 			reconciler: reconciler{
 				Client: k8sManager.GetClient(),
 				Cache:  k8sManager.GetCache(),
-				Opts:   Options{CASecret: caSecretRef},
-			},
-		}
+				Opts: Options{
+					Namespace: caSecretRef.Namespace,
+					CASecret:  caSecretRef.Name,
+				}}}
 		Expect(controller.SetupWithManager(k8sManager)).To(Succeed())
 
 		go func() {

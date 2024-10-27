@@ -36,7 +36,10 @@ var _ = Describe("Controller Integration Test", Ordered, func() {
 		})
 		Expect(err).ToNot(HaveOccurred())
 
-		opts := controller.Options{CASecret: caSecretRef}
+		opts := controller.Options{
+			Namespace: caSecretRef.Namespace,
+			CASecret:  caSecretRef.Name,
+		}
 		Expect(controller.SetupWithManager(k8sManager, opts)).To(Succeed())
 
 		go func() {

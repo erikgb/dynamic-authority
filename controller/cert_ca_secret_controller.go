@@ -45,7 +45,10 @@ func (r *CASecretReconciler) SetupWithManager(mgr ctrl.Manager) error {
 			source.Channel(
 				r.events,
 				handler.EnqueueRequestsFromMapFunc(func(context.Context, client.Object) []ctrl.Request {
-					return []ctrl.Request{{NamespacedName: r.Opts.CASecret}}
+					return []ctrl.Request{{NamespacedName: types.NamespacedName{
+						Namespace: r.Opts.Namespace,
+						Name:      r.Opts.CASecret,
+					}}}
 				}),
 			),
 		).

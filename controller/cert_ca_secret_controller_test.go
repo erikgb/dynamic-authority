@@ -41,9 +41,11 @@ var _ = Describe("CA Secret Controller", Ordered, func() {
 			reconciler: reconciler{
 				Client: k8sManager.GetClient(),
 				Cache:  k8sManager.GetCache(),
-				Opts:   Options{CASecret: caSecretRef, CADuration: 7 * 24 * time.Hour},
-			},
-		}
+				Opts: Options{
+					Namespace:  caSecretRef.Namespace,
+					CASecret:   caSecretRef.Name,
+					CADuration: 7 * 24 * time.Hour,
+				}}}
 		Expect(controller.SetupWithManager(k8sManager)).To(Succeed())
 
 		go func() {

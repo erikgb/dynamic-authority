@@ -5,6 +5,7 @@ import (
 
 	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/types"
 	admissionregistrationv1ac "k8s.io/client-go/applyconfigurations/admissionregistration/v1"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -28,9 +29,12 @@ func (r *InjectableReconciler) SetupWithManager(mgr ctrl.Manager) error {
 				r.Cache,
 				&admissionregistrationv1.ValidatingWebhookConfiguration{},
 				handler.TypedEnqueueRequestsFromMapFunc(func(ctx context.Context, obj *admissionregistrationv1.ValidatingWebhookConfiguration) []ctrl.Request {
-					if obj.GetLabels()[WantInjectFromSecretNamespaceLabel] == r.Opts.CASecret.Namespace &&
-						obj.GetLabels()[WantInjectFromSecretNameLabel] == r.Opts.CASecret.Name {
-						return []ctrl.Request{{NamespacedName: r.Opts.CASecret}}
+					if obj.GetLabels()[WantInjectFromSecretNamespaceLabel] == r.Opts.Namespace &&
+						obj.GetLabels()[WantInjectFromSecretNameLabel] == r.Opts.CASecret {
+						return []ctrl.Request{{NamespacedName: types.NamespacedName{
+							Namespace: r.Opts.Namespace,
+							Name:      r.Opts.CASecret,
+						}}}
 					}
 					return []ctrl.Request{}
 				}),
@@ -56,8 +60,8 @@ func (r *InjectableReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 func (r *InjectableReconciler) reconcileInjectables(ctx context.Context, secret *corev1.Secret) error {
 	objList := &admissionregistrationv1.ValidatingWebhookConfigurationList{}
 	if err := r.List(ctx, objList, client.MatchingLabels(map[string]string{
-		WantInjectFromSecretNamespaceLabel: r.Opts.CASecret.Namespace,
-		WantInjectFromSecretNameLabel:      r.Opts.CASecret.Name,
+		WantInjectFromSecretNamespaceLabel: r.Opts.Namespace,
+		WantInjectFromSecretNameLabel:      r.Opts.CASecret,
 	})); err != nil {
 		return err
 	}
