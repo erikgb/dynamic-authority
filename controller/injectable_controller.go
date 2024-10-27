@@ -2,6 +2,7 @@ package controller
 
 import (
 	"context"
+	"sigs.k8s.io/controller-runtime/pkg/predicate"
 
 	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -29,17 +30,14 @@ func (r *InjectableReconciler) SetupWithManager(mgr ctrl.Manager) error {
 				r.Cache,
 				&admissionregistrationv1.ValidatingWebhookConfiguration{},
 				handler.TypedEnqueueRequestsFromMapFunc(func(ctx context.Context, obj *admissionregistrationv1.ValidatingWebhookConfiguration) []ctrl.Request {
-					if obj.GetLabels()[WantInjectFromSecretNamespaceLabel] == r.Opts.Namespace &&
-						obj.GetLabels()[WantInjectFromSecretNameLabel] == r.Opts.CASecret {
-						return []ctrl.Request{{NamespacedName: types.NamespacedName{
-							Namespace: r.Opts.Namespace,
-							Name:      r.Opts.CASecret,
-						}}}
-					}
-					return []ctrl.Request{}
+					return []ctrl.Request{{NamespacedName: types.NamespacedName{
+						Namespace: r.Opts.Namespace,
+						Name:      r.Opts.CASecret,
+					}}}
 				}),
-			),
-		).
+				predicate.NewTypedPredicateFuncs[*admissionregistrationv1.ValidatingWebhookConfiguration](func(obj *admissionregistrationv1.ValidatingWebhookConfiguration) bool {
+					return obj.GetLabels()[WantInjectFromSecretNamespaceLabel] == r.Opts.Namespace && obj.GetLabels()[WantInjectFromSecretNameLabel] == r.Opts.CASecret
+				}))).
 		Complete(r)
 }
 
