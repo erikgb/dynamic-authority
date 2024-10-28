@@ -21,17 +21,30 @@ const (
 	// If an injectable references a Secret that does NOT have this annotation,
 	// the dynamic ca-injector will refuse to inject the secret.
 	DynamicAuthoritySecretLabel = "cert-manager.io/allow-dynamic-ca-injection"
-	// WantInjectFromSecretNamespaceLabel is the label that specifies that a particular
-	// object wants injection of dynamic CAs from secret in namespace.
+	// WantInjectFromSecretNamespaceLabel is the label that specifies that a
+	// particular object wants injection of dynamic CAs from secret in
+	// namespace.
 	// Must be used in conjunction with WantInjectFromSecretNameLabel.
 	WantInjectFromSecretNamespaceLabel = "cert-manager.io/inject-dynamic-ca-from-secret-namespace"
-	// WantInjectFromSecretNameLabel is the label that specifies that a particular
-	// object wants injection of dynamic CAs from secret with name.
+	// WantInjectFromSecretNameLabel is the label that specifies that a
+	// particular object wants injection of dynamic CAs from secret with name.
 	// Must be used in conjunction with WantInjectFromSecretNamespaceLabel.
 	WantInjectFromSecretNameLabel = "cert-manager.io/inject-dynamic-ca-from-secret-name"
 
-	// TLSCABundleKey is used as a data key in Secret resources to store a CA certificate bundle.
+	// TLSCABundleKey is used as a data key in Secret resources to store a CA
+	// certificate bundle.
 	TLSCABundleKey = "ca-bundle.crt"
+
+	// IssuedCertificateSecretAnnotation is an annotation that will be set on a
+	// certificate secret whenever a new certificate is issued.
+	// The value must be a timestamp in the RFC 3339 format.
+	IssuedCertificateSecretAnnotation = "renew.cert-manager.io/issuedAt"
+	// RenewCertificateSecretAnnotation is an annotation that can be set on a
+	// certificate secret to trigger a renewal of the certificate managed in
+	// the secret.
+	// The value must be a timestamp in the RFC 3339 format, and must be after
+	// IssuedCertificateSecretAnnotation to trigger the renewal.
+	RenewCertificateSecretAnnotation = "renew.cert-manager.io/requestedAt"
 )
 
 type Options struct {

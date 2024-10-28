@@ -1,7 +1,6 @@
 package controller
 
 import (
-	"bytes"
 	"context"
 	"crypto/ecdsa"
 	"crypto/rand"
@@ -74,8 +73,11 @@ func (r *CASecretReconciler) reconcileSecret(ctx context.Context, name types.Nam
 	// TODO: Check if secret is up-to-date
 	// Has valid cert + key
 	// Cert is included in CA bundle
-	if !bytes.Equal(secret.Data[TLSCABundleKey], secret.Data[corev1.TLSCertKey]) {
-		return nil
+	if len(secret.Data[corev1.TLSCertKey]) > 0 && !r.renewRequested(secret) {
+		_, err := pki.DecodeX509CertificateBytes(secret.Data[corev1.TLSCertKey])
+		if err == nil {
+			return nil
+		}
 	}
 
 	cert, pk, err := r.generateCA()
@@ -92,18 +94,43 @@ func (r *CASecretReconciler) reconcileSecret(ctx context.Context, name types.Nam
 		return err
 	}
 
+	caBundleBytes, err := r.reconcileCABundle(secret.Data[TLSCABundleKey], certBytes)
+	if err != nil {
+		log.FromContext(ctx).V(1).Error(err, "when reconciling CA bundle")
+		caBundleBytes = certBytes
+	}
+
 	data := map[string][]byte{
 		corev1.TLSCertKey:       certBytes,
 		corev1.TLSPrivateKeyKey: pkBytes,
-		// TODO: Reconcile CA bundle correctly
-		TLSCABundleKey: certBytes,
+		TLSCABundleKey:          caBundleBytes,
 	}
 	ac := corev1ac.Secret(secret.Name, secret.Namespace).
-		WithLabels(map[string]string{DynamicAuthoritySecretLabel: "true"}).
+		WithLabels(map[string]string{
+			DynamicAuthoritySecretLabel: "true",
+		}).
+		WithAnnotations(map[string]string{
+			IssuedCertificateSecretAnnotation: nowString(),
+		}).
 		WithType(corev1.SecretTypeTLS).
 		WithData(data)
 
 	return r.Patch(ctx, secret, newApplyPatch(ac), client.ForceOwnership, fieldOwner)
+}
+
+func (r *CASecretReconciler) reconcileCABundle(caBundleBytes []byte, caCertBytes []byte) ([]byte, error) {
+	if len(caBundleBytes) == 0 {
+		return caCertBytes, nil
+	}
+
+	certPool := pki.NewCertPool(pki.WithFilteredExpiredCerts(true))
+	if err := certPool.AddCertsFromPEM(caBundleBytes); err != nil {
+		return nil, err
+	}
+	if err := certPool.AddCertsFromPEM(caCertBytes); err != nil {
+		return nil, err
+	}
+	return []byte(certPool.PEM()), nil
 }
 
 var serialNumberLimit = new(big.Int).Lsh(big.NewInt(1), 128)
