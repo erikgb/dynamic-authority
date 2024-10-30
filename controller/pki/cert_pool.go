@@ -56,6 +56,19 @@ func NewCertPool(options ...Option) *CertPool {
 	return certPool
 }
 
+func (cp *CertPool) AddCert(cert *x509.Certificate) bool {
+	if cert == nil {
+		panic("adding nil Certificate to CertPool")
+	}
+	if cp.filterExpired && time.Now().After(cert.NotAfter) {
+		return false
+	}
+
+	hash := sha256.Sum256(cert.Raw)
+	cp.certificates[hash] = cert
+	return true
+}
+
 // AddCertsFromPEM strictly validates a given input PEM bundle to confirm it contains
 // only valid CERTIFICATE PEM blocks. If successful, returns the validated PEM blocks with any
 // comments or extra data stripped.
@@ -111,14 +124,9 @@ func (cp *CertPool) AddCertsFromPEM(pemData []byte) error {
 			return fmt.Errorf("failed appending a certificate: certificate is nil")
 		}
 
-		if cp.filterExpired && time.Now().After(certificate.NotAfter) {
-			continue
+		if cp.AddCert(certificate) {
+			ok = true // at least one non-expired certificate was found in the input
 		}
-
-		ok = true // at least one non-expired certificate was found in the input
-
-		hash := sha256.Sum256(certificate.Raw)
-		cp.certificates[hash] = certificate
 	}
 
 	if !ok {
@@ -133,14 +141,14 @@ func (cp *CertPool) Size() int {
 	return len(cp.certificates)
 }
 
-func (certPool *CertPool) PEM() string {
-	if certPool == nil || len(certPool.certificates) == 0 {
+func (cp *CertPool) PEM() string {
+	if cp == nil || len(cp.certificates) == 0 {
 		return ""
 	}
 
 	buffer := bytes.Buffer{}
 
-	for _, cert := range certPool.Certificates() {
+	for _, cert := range cp.Certificates() {
 		if err := pem.Encode(&buffer, &pem.Block{Type: "CERTIFICATE", Bytes: cert.Raw}); err != nil {
 			return ""
 		}
@@ -149,13 +157,13 @@ func (certPool *CertPool) PEM() string {
 	return string(bytes.TrimSpace(buffer.Bytes()))
 }
 
-func (certPool *CertPool) PEMSplit() []string {
-	if certPool == nil || len(certPool.certificates) == 0 {
+func (cp *CertPool) PEMSplit() []string {
+	if cp == nil || len(cp.certificates) == 0 {
 		return nil
 	}
 
-	pems := make([]string, 0, len(certPool.certificates))
-	for _, cert := range certPool.Certificates() {
+	pems := make([]string, 0, len(cp.certificates))
+	for _, cert := range cp.Certificates() {
 		pems = append(pems, string(bytes.TrimSpace(pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: cert.Raw}))))
 	}
 
@@ -163,9 +171,9 @@ func (certPool *CertPool) PEMSplit() []string {
 }
 
 // Get the list of all x509 Certificates in the certificates pool
-func (certPool *CertPool) Certificates() []*x509.Certificate {
-	hashes := make([][32]byte, 0, len(certPool.certificates))
-	for hash := range certPool.certificates {
+func (cp *CertPool) Certificates() []*x509.Certificate {
+	hashes := make([][32]byte, 0, len(cp.certificates))
+	for hash := range cp.certificates {
 		hashes = append(hashes, hash)
 	}
 
@@ -173,9 +181,9 @@ func (certPool *CertPool) Certificates() []*x509.Certificate {
 		return bytes.Compare(i[:], j[:])
 	})
 
-	orderedCertificates := make([]*x509.Certificate, 0, len(certPool.certificates))
+	orderedCertificates := make([]*x509.Certificate, 0, len(cp.certificates))
 	for _, hash := range hashes {
-		orderedCertificates = append(orderedCertificates, certPool.certificates[hash])
+		orderedCertificates = append(orderedCertificates, cp.certificates[hash])
 	}
 
 	return orderedCertificates

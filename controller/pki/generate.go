@@ -1,9 +1,12 @@
 package pki
 
 import (
+	"crypto"
 	"crypto/ecdsa"
+	"crypto/ed25519"
 	"crypto/elliptic"
 	"crypto/rand"
+	"crypto/rsa"
 	"crypto/x509"
 	"encoding/pem"
 	"fmt"
@@ -46,4 +49,21 @@ func EncodePKCS8PrivateKey(pk *ecdsa.PrivateKey) ([]byte, error) {
 	block := &pem.Block{Type: "PRIVATE KEY", Bytes: keyBytes}
 
 	return pem.EncodeToMemory(block), nil
+}
+
+// PublicKeysEqual compares two given public keys for equality.
+// The definition of "equality" depends on the type of the public keys.
+// Returns true if the keys are the same, false if they differ or an error if
+// the key type of `a` cannot be determined.
+func PublicKeysEqual(a, b crypto.PublicKey) (bool, error) {
+	switch pub := a.(type) {
+	case *rsa.PublicKey:
+		return pub.Equal(b), nil
+	case *ecdsa.PublicKey:
+		return pub.Equal(b), nil
+	case ed25519.PublicKey:
+		return pub.Equal(b), nil
+	default:
+		return false, fmt.Errorf("unrecognised public key type: %T", a)
+	}
 }

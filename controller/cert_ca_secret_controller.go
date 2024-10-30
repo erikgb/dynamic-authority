@@ -94,7 +94,7 @@ func (r *CASecretReconciler) reconcileSecret(ctx context.Context, name types.Nam
 		return err
 	}
 
-	caBundleBytes, err := r.reconcileCABundle(secret.Data[TLSCABundleKey], certBytes)
+	caBundleBytes, err := r.reconcileCABundle(secret.Data[TLSCABundleKey], cert)
 	if err != nil {
 		log.FromContext(ctx).V(1).Error(err, "when reconciling CA bundle")
 		caBundleBytes = certBytes
@@ -118,18 +118,21 @@ func (r *CASecretReconciler) reconcileSecret(ctx context.Context, name types.Nam
 	return r.Patch(ctx, secret, newApplyPatch(ac), client.ForceOwnership, fieldOwner)
 }
 
-func (r *CASecretReconciler) reconcileCABundle(caBundleBytes []byte, caCertBytes []byte) ([]byte, error) {
-	if len(caBundleBytes) == 0 {
-		return caCertBytes, nil
+func (r *CASecretReconciler) reconcileCABundle(caBundleBytes []byte, caCert *x509.Certificate) ([]byte, error) {
+	certPool := pki.NewCertPool(pki.WithFilteredExpiredCerts(true))
+
+	if len(caBundleBytes) > 0 {
+		caBundle, err := pki.DecodeX509CertificateSetBytes(caBundleBytes)
+		if err != nil {
+			return nil, err
+		}
+		for _, c := range caBundle {
+			certPool.AddCert(c)
+		}
 	}
 
-	certPool := pki.NewCertPool(pki.WithFilteredExpiredCerts(true))
-	if err := certPool.AddCertsFromPEM(caBundleBytes); err != nil {
-		return nil, err
-	}
-	if err := certPool.AddCertsFromPEM(caCertBytes); err != nil {
-		return nil, err
-	}
+	certPool.AddCert(caCert)
+
 	return []byte(certPool.PEM()), nil
 }
 

@@ -24,12 +24,10 @@ func assertCASecret(secret *corev1.Secret) {
 
 	cert, err := pki.DecodeX509CertificateBytes(secret.Data[corev1.TLSCertKey])
 	Expect(err).ToNot(HaveOccurred())
-	pk, err := pki.DecodePrivateKeyBytes(secret.Data[corev1.TLSPrivateKeyKey])
-	Expect(err).ToNot(HaveOccurred())
 	caBundle, err := pki.DecodeX509CertificateSetBytes(secret.Data[TLSCABundleKey])
 	Expect(err).ToNot(HaveOccurred())
 
-	Expect(cert.PublicKey).To(Equal(pk.Public()))
+	Expect(SecretPublicKeysDiffer(secret)).To(BeFalse())
 	Expect(cert.Subject).To(Equal(cert.Issuer))
 	Expect(caBundle).To(ContainElement(cert))
 }
