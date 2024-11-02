@@ -33,7 +33,8 @@ func (r *InjectableReconciler) SetupWithManager(mgr ctrl.Manager) error {
 				newUnstructured(r.Injectable),
 				&handler.TypedEnqueueRequestForObject[*unstructured.Unstructured]{},
 				predicate.NewTypedPredicateFuncs(func(obj *unstructured.Unstructured) bool {
-					return obj.GetLabels()[WantInjectFromSecretNamespaceLabel] == r.Opts.Namespace && obj.GetLabels()[WantInjectFromSecretNameLabel] == r.Opts.CASecret
+					return obj.GetLabels()[WantInjectFromSecretNamespaceLabel] == r.Opts.Namespace &&
+						obj.GetLabels()[WantInjectFromSecretNameLabel] == r.Opts.CASecret
 				}))).
 		WatchesRawSource(
 			source.Kind(
@@ -56,12 +57,9 @@ func (r *InjectableReconciler) SetupWithManager(mgr ctrl.Manager) error {
 						req.Name = obj.GetName()
 						requests = append(requests, req)
 					}
-
 					return requests
 				}),
-				predicate.NewTypedPredicateFuncs[*corev1.Secret](func(obj *corev1.Secret) bool {
-					return obj.Namespace == r.Opts.Namespace && obj.Name == r.Opts.CASecret
-				}))).
+				r.Opts.caSecretPredicate())).
 		Complete(r)
 }
 

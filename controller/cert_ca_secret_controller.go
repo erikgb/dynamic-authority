@@ -39,15 +39,15 @@ func (r *CASecretReconciler) SetupWithManager(mgr ctrl.Manager) error {
 
 	return ctrl.NewControllerManagedBy(mgr).
 		Named("cert_ca_secret").
-		WatchesRawSource(r.secretSource(r.Opts.CASecret)).
+		WatchesRawSource(r.secretSource(r.Opts.caSecretPredicate())).
 		WatchesRawSource(
 			source.Channel(
 				r.events,
 				handler.EnqueueRequestsFromMapFunc(func(context.Context, client.Object) []ctrl.Request {
-					return []ctrl.Request{{NamespacedName: types.NamespacedName{
-						Namespace: r.Opts.Namespace,
-						Name:      r.Opts.CASecret,
-					}}}
+					req := ctrl.Request{}
+					req.Namespace = r.Opts.Namespace
+					req.Name = r.Opts.CASecret
+					return []ctrl.Request{req}
 				}),
 			),
 		).

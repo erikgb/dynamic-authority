@@ -17,15 +17,12 @@ type reconciler struct {
 	Opts  Options
 }
 
-func (r reconciler) secretSource(name string) source.SyncingSource {
+func (r reconciler) secretSource(predicates ...predicate.TypedPredicate[*corev1.Secret]) source.SyncingSource {
 	return source.Kind(
 		r.Cache,
 		&corev1.Secret{},
 		&handler.TypedEnqueueRequestForObject[*corev1.Secret]{},
-		predicate.NewTypedPredicateFuncs[*corev1.Secret](func(obj *corev1.Secret) bool {
-			return obj.Namespace == r.Opts.Namespace && obj.Name == name
-		}),
-	)
+		predicates...)
 }
 
 func (r reconciler) renewRequested(secret *corev1.Secret) bool {
