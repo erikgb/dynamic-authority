@@ -1,6 +1,8 @@
 package controller
 
 import (
+	"time"
+
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
@@ -62,6 +64,12 @@ var _ = Describe("CA Secret Controller", Ordered, func() {
 
 	It("should create Secret on startup", func() {
 		assertCASecret(caSecret)
+
+		By("checking for reconcile loops")
+		resourceVersion := caSecret.ResourceVersion
+		Consistently(komega.Object(caSecret)).Should(
+			HaveField("ResourceVersion", Equal(resourceVersion)),
+		)
 	})
 
 	It("should recreate Secret if it's deleted", func() {
@@ -93,7 +101,7 @@ var _ = Describe("CA Secret Controller", Ordered, func() {
 		)
 
 		By("requesting a renewal")
-		caSecret.Annotations[RenewCertificateSecretAnnotation] = nowString()
+		caSecret.Annotations = map[string]string{RenewCertificateSecretAnnotation: time.Now().String()}
 		Expect(k8sClient.Update(ctx, caSecret)).To(Succeed())
 
 		Eventually(komega.Object(caSecret)).Should(

@@ -38,16 +38,14 @@ const (
 	// certificate bundle.
 	TLSCABundleKey = "ca-bundle.crt"
 
-	// IssuedCertificateSecretAnnotation is an annotation that will be set on a
-	// certificate secret whenever a new certificate is issued.
-	// The value must be a timestamp in the RFC 3339 format.
-	IssuedCertificateSecretAnnotation = "renew.cert-manager.io/issuedAt"
-	// RenewCertificateSecretAnnotation is an annotation that can be set on a
-	// certificate secret to trigger a renewal of the certificate managed in
-	// the secret.
-	// The value must be a timestamp in the RFC 3339 format, and must be after
-	// IssuedCertificateSecretAnnotation to trigger the renewal.
+	// RenewCertificateSecretAnnotation is an annotation that can be set to
+	// an arbitrary value on a certificate secret to trigger a renewal of the
+	// certificate managed in the secret.
 	RenewCertificateSecretAnnotation = "renew.cert-manager.io/requestedAt"
+	// RenewHandledCertificateSecretAnnotation is an annotation that will be set on a
+	// certificate secret whenever a new certificate is renewed using the
+	// RenewCertificateSecretAnnotation annotation.
+	RenewHandledCertificateSecretAnnotation = "renew.cert-manager.io/lastRequestedAt"
 )
 
 type ApplyConfiguration interface {
@@ -80,7 +78,7 @@ func (i *ValidatingWebhookCaBundleInject) InjectCA(obj *unstructured.Unstructure
 		return nil, err
 	}
 	for _, w := range webhooks {
-		name, _, err := unstructured.NestedString(w.(map[string]interface{}), "name")
+		name, _, err := unstructured.NestedString(w.(map[string]any), "name")
 		if err != nil {
 			return nil, err
 		}

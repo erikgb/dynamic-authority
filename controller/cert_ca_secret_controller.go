@@ -2,7 +2,7 @@ package controller
 
 import (
 	"context"
-	"crypto/ecdsa"
+	"crypto"
 	"crypto/rand"
 	"crypto/x509"
 	"crypto/x509/pkix"
@@ -69,26 +69,21 @@ func (r *CASecretReconciler) reconcileSecret(ctx context.Context, name types.Nam
 		secret.Name = name.Name
 	}
 
-	// TODO: Check if secret is up-to-date
-	// Has valid cert + key
-	// Cert is included in CA bundle
-	if len(secret.Data[corev1.TLSCertKey]) > 0 && !r.renewRequested(secret) {
-		_, err := pki.DecodeX509CertificateBytes(secret.Data[corev1.TLSCertKey])
-		if err == nil {
-			return nil
-		}
-	}
+	generate, cert, pk := r.needsGenerate(secret)
 
-	cert, pk, err := r.generateCA()
-	if err != nil {
-		return err
+	if generate || secret.Annotations[RenewCertificateSecretAnnotation] != secret.Annotations[RenewHandledCertificateSecretAnnotation] {
+		var err error
+		cert, pk, err = r.generateCA()
+		if err != nil {
+			return err
+		}
 	}
 
 	certBytes, err := pki.EncodeX509(cert)
 	if err != nil {
 		return err
 	}
-	pkBytes, err := pki.EncodePKCS8PrivateKey(pk)
+	pkBytes, err := pki.EncodePrivateKey(pk)
 	if err != nil {
 		return err
 	}
@@ -99,20 +94,22 @@ func (r *CASecretReconciler) reconcileSecret(ctx context.Context, name types.Nam
 		caBundleBytes = certBytes
 	}
 
-	data := map[string][]byte{
-		corev1.TLSCertKey:       certBytes,
-		corev1.TLSPrivateKeyKey: pkBytes,
-		TLSCABundleKey:          caBundleBytes,
-	}
 	ac := corev1ac.Secret(secret.Name, secret.Namespace).
 		WithLabels(map[string]string{
 			DynamicAuthoritySecretLabel: "true",
 		}).
-		WithAnnotations(map[string]string{
-			IssuedCertificateSecretAnnotation: nowString(),
-		}).
 		WithType(corev1.SecretTypeTLS).
-		WithData(data)
+		WithData(map[string][]byte{
+			corev1.TLSCertKey:       certBytes,
+			corev1.TLSPrivateKeyKey: pkBytes,
+			TLSCABundleKey:          caBundleBytes,
+		})
+
+	if v, ok := secret.Annotations[RenewCertificateSecretAnnotation]; ok {
+		ac.WithAnnotations(map[string]string{
+			RenewHandledCertificateSecretAnnotation: v,
+		})
+	}
 
 	return r.Patch(ctx, secret, newApplyPatch(ac), client.ForceOwnership, fieldOwner)
 }
@@ -135,10 +132,29 @@ func (r *CASecretReconciler) reconcileCABundle(caBundleBytes []byte, caCert *x50
 	return []byte(certPool.PEM()), nil
 }
 
+func (r *CASecretReconciler) needsGenerate(secret *corev1.Secret) (bool, *x509.Certificate, crypto.Signer) {
+	cert, err := pki.DecodeX509CertificateBytes(secret.Data[corev1.TLSCertKey])
+	if err != nil {
+		return true, nil, nil
+	}
+	pk, err := pki.DecodePrivateKeyBytes(secret.Data[corev1.TLSPrivateKeyKey])
+	if err != nil {
+		return true, nil, nil
+	}
+
+	equal, err := pki.PublicKeysEqual(cert.PublicKey, pk.Public())
+	if !equal || err != nil {
+		return true, nil, nil
+	}
+
+	// TODO: Trigger renew check due
+	return false, cert, pk
+}
+
 var serialNumberLimit = new(big.Int).Lsh(big.NewInt(1), 128)
 
 // generateCA will regenerate a new CA.
-func (r *CASecretReconciler) generateCA() (*x509.Certificate, *ecdsa.PrivateKey, error) {
+func (r *CASecretReconciler) generateCA() (*x509.Certificate, crypto.Signer, error) {
 	pk, err := pki.GenerateECPrivateKey(384)
 	if err != nil {
 		return nil, nil, err

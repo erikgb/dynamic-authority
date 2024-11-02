@@ -40,14 +40,48 @@ func GenerateECPrivateKey(keySize int) (*ecdsa.PrivateKey, error) {
 	return ecdsa.GenerateKey(ecCurve, rand.Reader)
 }
 
+// EncodePrivateKey will encode a given crypto.PrivateKey by first inspecting
+// the type of key encoding and then inspecting the type of key provided.
+// It only supports encoding RSA or ECDSA keys.
+func EncodePrivateKey(pk crypto.PrivateKey) ([]byte, error) {
+	switch k := pk.(type) {
+	case *rsa.PrivateKey:
+		return EncodePKCS1PrivateKey(k), nil
+	case *ecdsa.PrivateKey:
+		return EncodeECPrivateKey(k)
+	case ed25519.PrivateKey:
+		return EncodePKCS8PrivateKey(k)
+	default:
+		return nil, fmt.Errorf("error encoding private key: unknown key type: %T", pk)
+	}
+}
+
+// EncodePKCS1PrivateKey will marshal a RSA private key into x509 PEM format.
+func EncodePKCS1PrivateKey(pk *rsa.PrivateKey) []byte {
+	block := &pem.Block{Type: "RSA PRIVATE KEY", Bytes: x509.MarshalPKCS1PrivateKey(pk)}
+
+	return pem.EncodeToMemory(block)
+}
+
 // EncodePKCS8PrivateKey will marshal a private key into x509 PEM format.
-func EncodePKCS8PrivateKey(pk *ecdsa.PrivateKey) ([]byte, error) {
+func EncodePKCS8PrivateKey(pk interface{}) ([]byte, error) {
 	keyBytes, err := x509.MarshalPKCS8PrivateKey(pk)
 	if err != nil {
 		return nil, err
 	}
 	block := &pem.Block{Type: "PRIVATE KEY", Bytes: keyBytes}
 
+	return pem.EncodeToMemory(block), nil
+}
+
+// EncodeECPrivateKey will marshal an ECDSA private key into x509 PEM format.
+func EncodeECPrivateKey(pk *ecdsa.PrivateKey) ([]byte, error) {
+	asnBytes, err := x509.MarshalECPrivateKey(pk)
+	if err != nil {
+		return nil, fmt.Errorf("error encoding private key: %s", err.Error())
+	}
+
+	block := &pem.Block{Type: "EC PRIVATE KEY", Bytes: asnBytes}
 	return pem.EncodeToMemory(block), nil
 }
 
