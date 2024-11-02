@@ -2,6 +2,7 @@ package controller
 
 import (
 	"context"
+	"k8s.io/apimachinery/pkg/api/errors"
 	"strings"
 
 	corev1 "k8s.io/api/core/v1"
@@ -41,6 +42,10 @@ func (r *InjectableReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 
 	secret := &corev1.Secret{}
 	if err := r.Get(ctx, types.NamespacedName{Namespace: r.Opts.Namespace, Name: r.Opts.CASecret}, secret); err != nil {
+		if errors.IsNotFound(err) {
+			log.FromContext(ctx).V(1).Info("CA secret not yet found, requeueing request...")
+			return ctrl.Result{Requeue: true}, nil
+		}
 		return ctrl.Result{}, err
 	}
 

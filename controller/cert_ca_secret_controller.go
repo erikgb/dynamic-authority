@@ -55,7 +55,6 @@ func (r *CASecretReconciler) SetupWithManager(mgr ctrl.Manager) error {
 }
 
 func (r *CASecretReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	_ = log.FromContext(ctx)
 	return ctrl.Result{}, r.reconcileSecret(ctx, req.NamespacedName)
 }
 
