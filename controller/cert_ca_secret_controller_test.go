@@ -1,8 +1,6 @@
 package controller
 
 import (
-	"time"
-
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
@@ -44,9 +42,8 @@ var _ = Describe("CA Secret Controller", Ordered, func() {
 				Client: k8sManager.GetClient(),
 				Cache:  k8sManager.GetCache(),
 				Opts: Options{
-					Namespace:  caSecretRef.Namespace,
-					CASecret:   caSecretRef.Name,
-					CADuration: 7 * 24 * time.Hour,
+					Namespace: caSecretRef.Namespace,
+					CASecret:  caSecretRef.Name,
 				}}}
 		Expect(controller.SetupWithManager(k8sManager)).To(Succeed())
 
@@ -63,16 +60,16 @@ var _ = Describe("CA Secret Controller", Ordered, func() {
 		caSecret.Name = caSecretRef.Name
 	})
 
-	It("should create CA caSecret on startup", func() {
+	It("should create Secret on startup", func() {
 		assertCASecret(caSecret)
 	})
 
-	It("should recreate CA caSecret if it's deleted", func() {
+	It("should recreate Secret if it's deleted", func() {
 		Expect(k8sClient.Delete(ctx, caSecret)).To(Succeed())
 		assertCASecret(caSecret)
 	})
 
-	It("should renew CA if CA caSecret is modified", func() {
+	It("should issue certificate if Secret is modified", func() {
 		caSecret.Type = corev1.SecretTypeTLS
 		caSecret.Data = map[string][]byte{
 			corev1.TLSCertKey:       []byte("foo"),
@@ -82,7 +79,7 @@ var _ = Describe("CA Secret Controller", Ordered, func() {
 		assertCASecret(caSecret)
 	})
 
-	It("should retain old CA if CA is renewed", func() {
+	It("should retain old CA if CA is rotated", func() {
 		assertCASecret(caSecret)
 
 		caBundleCerts, err := pki.DecodeX509CertificateSetBytes(caSecret.Data[TLSCABundleKey])

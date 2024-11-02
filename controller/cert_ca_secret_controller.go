@@ -145,6 +145,11 @@ func (r *CASecretReconciler) generateCA() (*x509.Certificate, *ecdsa.PrivateKey,
 		return nil, nil, err
 	}
 
+	duration := r.Opts.CADuration
+	if duration == 0 {
+		duration = 7 * 24 * time.Hour
+	}
+
 	serialNumber, err := rand.Int(rand.Reader, serialNumberLimit)
 	if err != nil {
 		return nil, nil, err
@@ -159,7 +164,7 @@ func (r *CASecretReconciler) generateCA() (*x509.Certificate, *ecdsa.PrivateKey,
 		},
 		IsCA:      true,
 		NotBefore: time.Now(),
-		NotAfter:  time.Now().Add(r.Opts.CADuration),
+		NotAfter:  time.Now().Add(duration),
 		KeyUsage:  x509.KeyUsageDigitalSignature | x509.KeyUsageKeyEncipherment | x509.KeyUsageCertSign,
 	}
 	// self sign the root CA
