@@ -1,6 +1,8 @@
 package authority
 
 import (
+	"errors"
+	"fmt"
 	. "github.com/onsi/gomega"
 
 	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
@@ -28,7 +30,7 @@ func assertCASecret(secret *corev1.Secret) {
 	caBundle, err := pki.DecodeX509CertificateSetBytes(secret.Data[TLSCABundleKey])
 	Expect(err).ToNot(HaveOccurred())
 
-	Expect(SecretPublicKeysDiffer(secret)).To(BeFalse())
+	Expect(secretPublicKeysDiffer(secret)).To(BeFalse())
 	Expect(cert.Subject).To(Equal(cert.Issuer))
 	Expect(caBundle).To(ContainElement(cert))
 }
@@ -56,4 +58,25 @@ func newValidatingWebhookForTest(name string) admissionregistrationv1.Validating
 			URL: ptr.To("https://" + name),
 		},
 	}
+}
+
+func secretPublicKeysDiffer(secret *corev1.Secret) (bool, error) {
+	pk, err := pki.DecodePrivateKeyBytes(secret.Data[corev1.TLSPrivateKeyKey])
+	if err != nil {
+		return true, fmt.Errorf("secret contains invalid private key data: %w", err)
+	}
+	x509Cert, err := pki.DecodeX509CertificateBytes(secret.Data[corev1.TLSCertKey])
+	if err != nil {
+		return true, fmt.Errorf("secret contains an invalid certificate: %w", err)
+	}
+
+	equal, err := pki.PublicKeysEqual(x509Cert.PublicKey, pk.Public())
+	if err != nil {
+		return true, fmt.Errorf("secret contains an invalid key-pair: %w", err)
+	}
+	if !equal {
+		return true, errors.New("secret contains a private key that does not match the certificate")
+	}
+
+	return false, nil
 }
