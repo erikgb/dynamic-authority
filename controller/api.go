@@ -194,3 +194,9 @@ func newUnstructured(injectable Injectable) *unstructured.Unstructured {
 	obj.SetGroupVersionKind(injectable.GroupVersionKind())
 	return obj
 }
+
+func newUnstructuredList(injectable Injectable) *unstructured.UnstructuredList {
+	obj := &unstructured.UnstructuredList{}
+	obj.SetGroupVersionKind(injectable.GroupVersionKind())
+	return obj
+}

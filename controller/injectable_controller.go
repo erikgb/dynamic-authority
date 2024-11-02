@@ -2,10 +2,10 @@ package controller
 
 import (
 	"context"
-	"k8s.io/apimachinery/pkg/api/errors"
 	"strings"
 
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -13,6 +13,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
+	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 )
 
@@ -33,6 +34,33 @@ func (r *InjectableReconciler) SetupWithManager(mgr ctrl.Manager) error {
 				&handler.TypedEnqueueRequestForObject[*unstructured.Unstructured]{},
 				predicate.NewTypedPredicateFuncs(func(obj *unstructured.Unstructured) bool {
 					return obj.GetLabels()[WantInjectFromSecretNamespaceLabel] == r.Opts.Namespace && obj.GetLabels()[WantInjectFromSecretNameLabel] == r.Opts.CASecret
+				}))).
+		WatchesRawSource(
+			source.Kind(
+				r.Cache,
+				&corev1.Secret{},
+				handler.TypedEnqueueRequestsFromMapFunc(func(ctx context.Context, _ *corev1.Secret) []reconcile.Request {
+					objList := newUnstructuredList(r.Injectable)
+					if err := r.List(ctx, objList, client.MatchingLabels(map[string]string{
+						WantInjectFromSecretNamespaceLabel: r.Opts.Namespace,
+						WantInjectFromSecretNameLabel:      r.Opts.CASecret,
+					})); err != nil {
+						log.FromContext(ctx).Error(err, "when listing injectables")
+						return nil
+					}
+
+					requests := make([]reconcile.Request, len(objList.Items))
+					for _, obj := range objList.Items {
+						req := reconcile.Request{}
+						req.Namespace = obj.GetNamespace()
+						req.Name = obj.GetName()
+						requests = append(requests, req)
+					}
+
+					return requests
+				}),
+				predicate.NewTypedPredicateFuncs[*corev1.Secret](func(obj *corev1.Secret) bool {
+					return obj.Namespace == r.Opts.Namespace && obj.Name == r.Opts.CASecret
 				}))).
 		Complete(r)
 }

@@ -4,6 +4,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
+	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes/scheme"
@@ -32,9 +33,9 @@ var _ = Describe("Injectable Controller", Ordered, func() {
 			DynamicAuthoritySecretLabel: "true",
 		}
 		caSecret.Data = map[string][]byte{
-			corev1.TLSCertKey:       []byte("TODO CA cert injectable"),
-			corev1.TLSPrivateKeyKey: []byte("TODO CA cert key injectable"),
-			TLSCABundleKey:          []byte("TODO CA bundle injectable"),
+			corev1.TLSCertKey:       []byte("CA cert injectable"),
+			corev1.TLSPrivateKeyKey: []byte("CA cert key injectable"),
+			TLSCABundleKey:          []byte("CA bundle injectable"),
 		}
 		Expect(k8sClient.Create(ctx, caSecret)).To(Succeed())
 		caSecretRef = client.ObjectKeyFromObject(caSecret)
@@ -66,14 +67,26 @@ var _ = Describe("Injectable Controller", Ordered, func() {
 		}()
 	})
 
-	It("should inject CA bundle into VWC", func() {
-		vwc := NewValidatingWebhookConfigurationForTest("test-vwc", caSecretRef)
-		Expect(k8sClient.Create(ctx, vwc)).To(Succeed())
+	Context("ValidatingWebhookConfiguration", func() {
+		var vwc *admissionregistrationv1.ValidatingWebhookConfiguration
 
-		Eventually(komega.Object(vwc)).Should(
-			HaveField("Webhooks", HaveEach(
-				HaveField("ClientConfig.CABundle", Equal(caSecret.Data[TLSCABundleKey])),
-			)),
-		)
+		It("should inject CA bundle", func() {
+			vwc = NewValidatingWebhookConfigurationForTest("test-vwc", caSecretRef)
+			Expect(k8sClient.Create(ctx, vwc)).To(Succeed())
+		})
+
+		It("should update CA bundle when bundle updated", func() {
+			caSecret.Data[TLSCABundleKey] = []byte("updated CA bundle")
+			Expect(k8sClient.Update(ctx, caSecret)).To(Succeed())
+		})
+
+		AfterEach(func() {
+			Eventually(komega.Object(vwc)).Should(
+				HaveField("Webhooks", HaveEach(
+					HaveField("ClientConfig.CABundle", Equal(caSecret.Data[TLSCABundleKey])),
+				)),
+			)
+		})
 	})
+
 })
