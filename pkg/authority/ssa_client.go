@@ -1,4 +1,4 @@
-package controller
+package authority
 
 import (
 	"k8s.io/apimachinery/pkg/types"

@@ -1,4 +1,4 @@
-package controller
+package authority
 
 import (
 	. "github.com/onsi/ginkgo/v2"

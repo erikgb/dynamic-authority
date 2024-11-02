@@ -1,4 +1,4 @@
-package controller
+package authority
 
 import (
 	"errors"
@@ -6,7 +6,7 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 
-	"github.com/erikgb/dynamic-authority/controller/pki"
+	"github.com/erikgb/dynamic-authority/internal/pki"
 )
 
 func SecretPublicKeysDiffer(secret *corev1.Secret) (bool, error) {

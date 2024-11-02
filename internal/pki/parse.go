@@ -4,7 +4,8 @@ import (
 	"crypto"
 	"crypto/x509"
 	"encoding/pem"
-	"github.com/erikgb/dynamic-authority/controller/pki/errors"
+
+	"github.com/erikgb/dynamic-authority/internal/pki/errors"
 )
 
 // DecodeX509CertificateBytes will decode a PEM encoded x509 Certificate.

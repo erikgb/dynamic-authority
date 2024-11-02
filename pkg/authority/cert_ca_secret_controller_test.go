@@ -1,4 +1,4 @@
-package controller
+package authority
 
 import (
 	"time"
@@ -6,13 +6,14 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
-	"github.com/erikgb/dynamic-authority/controller/pki"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes/scheme"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/envtest/komega"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
+
+	"github.com/erikgb/dynamic-authority/internal/pki"
 )
 
 var _ = Describe("CA Secret Controller", Ordered, func() {

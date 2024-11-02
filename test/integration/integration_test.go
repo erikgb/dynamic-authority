@@ -4,13 +4,14 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
-	controller "github.com/erikgb/dynamic-authority/controller"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes/scheme"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/envtest/komega"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
+
+	"github.com/erikgb/dynamic-authority/pkg/authority"
 )
 
 var _ = Describe("Controller Integration Test", Ordered, func() {
@@ -36,14 +37,14 @@ var _ = Describe("Controller Integration Test", Ordered, func() {
 		})
 		Expect(err).ToNot(HaveOccurred())
 
-		opts := controller.Options{
+		opts := authority.Options{
 			Namespace: caSecretRef.Namespace,
 			CASecret:  caSecretRef.Name,
-			Injectables: []controller.Injectable{
-				&controller.ValidatingWebhookCaBundleInject{},
+			Injectables: []authority.Injectable{
+				&authority.ValidatingWebhookCaBundleInject{},
 			},
 		}
-		Expect(controller.SetupWithManager(k8sManager, opts)).To(Succeed())
+		Expect(authority.SetupWithManager(k8sManager, opts)).To(Succeed())
 
 		go func() {
 			defer GinkgoRecover()
@@ -53,7 +54,7 @@ var _ = Describe("Controller Integration Test", Ordered, func() {
 	})
 
 	It("should inject CA bundle into VWC", func() {
-		vwc := controller.NewValidatingWebhookConfigurationForTest("test-vwc", caSecretRef)
+		vwc := authority.NewValidatingWebhookConfigurationForTest("test-vwc", caSecretRef)
 		Expect(k8sClient.Create(ctx, vwc)).To(Succeed())
 
 		Eventually(komega.Object(vwc)).Should(

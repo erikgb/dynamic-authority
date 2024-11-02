@@ -1,14 +1,15 @@
-package controller
+package authority
 
 import (
 	. "github.com/onsi/gomega"
 
-	"github.com/erikgb/dynamic-authority/controller/pki"
 	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/envtest/komega"
+
+	"github.com/erikgb/dynamic-authority/internal/pki"
 )
 
 func assertCASecret(secret *corev1.Secret) {
