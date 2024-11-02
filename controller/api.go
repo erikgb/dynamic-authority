@@ -121,28 +121,34 @@ type Options struct {
 	Injectables []Injectable
 }
 
+// +kubebuilder:rbac:groups=admissionregistration.k8s.io,resources=validatingwebhookconfigurations,verbs=get;list;watch;patch
+
 func SetupWithManager(mgr controllerruntime.Manager, opts Options) error {
+	cacheByObject := map[client.Object]cache.ByObject{
+		&corev1.Secret{}: {
+			Namespaces: map[string]cache.Config{
+				opts.Namespace: {},
+			},
+			Label: labels.SelectorFromSet(labels.Set{
+				DynamicAuthoritySecretLabel: "true",
+			}),
+		},
+	}
+	injectByObject := cache.ByObject{
+		Label: labels.SelectorFromSet(labels.Set{
+			WantInjectFromSecretNamespaceLabel: opts.Namespace,
+			WantInjectFromSecretNameLabel:      opts.CASecret,
+		}),
+	}
+	for _, injectable := range opts.Injectables {
+		cacheByObject[injectable.GetObject()] = injectByObject
+	}
 	controllerCache, err := cache.New(mgr.GetConfig(), cache.Options{
 		HTTPClient:                  mgr.GetHTTPClient(),
 		Scheme:                      mgr.GetScheme(),
 		Mapper:                      mgr.GetRESTMapper(),
 		ReaderFailOnMissingInformer: true,
-		ByObject: map[client.Object]cache.ByObject{
-			&corev1.Secret{}: {
-				Namespaces: map[string]cache.Config{
-					opts.Namespace: {},
-				},
-				Label: labels.SelectorFromSet(labels.Set{
-					DynamicAuthoritySecretLabel: "true",
-				}),
-			},
-			&admissionregistrationv1.ValidatingWebhookConfiguration{}: {
-				Label: labels.SelectorFromSet(labels.Set{
-					WantInjectFromSecretNamespaceLabel: opts.Namespace,
-					WantInjectFromSecretNameLabel:      opts.CASecret,
-				}),
-			},
-		},
+		ByObject:                    cacheByObject,
 	})
 	if err := mgr.Add(controllerCache); err != nil {
 		return err

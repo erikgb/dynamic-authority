@@ -2,11 +2,11 @@ package controller
 
 import (
 	"context"
+	"strings"
 
 	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
-	admissionregistrationv1ac "k8s.io/client-go/applyconfigurations/admissionregistration/v1"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
@@ -24,7 +24,7 @@ type InjectableReconciler struct {
 // SetupWithManager sets up the controllers with the Manager.
 func (r *InjectableReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
-		Named("validating_webhook_configuration_ca_inject").
+		Named(strings.ToLower(r.Injectable.GroupVersionKind().Kind)).
 		WatchesRawSource(r.secretSource(r.Opts.CASecret)).
 		WatchesRawSource(
 			source.Kind(
@@ -43,7 +43,6 @@ func (r *InjectableReconciler) SetupWithManager(mgr ctrl.Manager) error {
 }
 
 // +kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch
-// +kubebuilder:rbac:groups=admissionregistration.k8s.io,resources=validatingwebhookconfigurations,verbs=get;list;watch;patch
 
 func (r *InjectableReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	_ = log.FromContext(ctx)
@@ -66,18 +65,9 @@ func (r *InjectableReconciler) reconcileInjectables(ctx context.Context, secret 
 	}
 
 	caBundle := secret.Data[TLSCABundleKey]
-	clientConfig := admissionregistrationv1ac.WebhookClientConfig().
-		WithCABundle(caBundle...)
 
 	for _, obj := range objList.Items {
-		ac := admissionregistrationv1ac.ValidatingWebhookConfiguration(obj.Name)
-		for _, w := range obj.Webhooks {
-			ac.WithWebhooks(
-				admissionregistrationv1ac.ValidatingWebhook().
-					WithName(w.Name).
-					WithClientConfig(clientConfig),
-			)
-		}
+		ac := r.Injectable.InjectCA(&obj, caBundle)
 
 		if err := r.Patch(ctx, &obj, newApplyPatch(ac), client.ForceOwnership, fieldOwner); err != nil {
 			return err
