@@ -6,7 +6,6 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -30,7 +29,7 @@ func (r *InjectableReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		WatchesRawSource(
 			source.Kind(
 				r.Cache,
-				r.Injectable.GetObject(),
+				newUnstructured(r.Injectable),
 				handler.TypedEnqueueRequestsFromMapFunc(func(ctx context.Context, obj *unstructured.Unstructured) []ctrl.Request {
 					return []ctrl.Request{{NamespacedName: types.NamespacedName{
 						Namespace: r.Opts.Namespace,
@@ -68,17 +67,13 @@ func (r *InjectableReconciler) reconcileInjectables(ctx context.Context, secret 
 
 	caBundle := secret.Data[TLSCABundleKey]
 
-	for _, u := range objList.Items {
-		obj := r.Injectable.GetObject()
-		if err := runtime.DefaultUnstructuredConverter.FromUnstructured(u.Object, obj); err != nil {
-			return err
-		}
-		ac, err := r.Injectable.InjectCA(obj, caBundle)
+	for _, obj := range objList.Items {
+		ac, err := r.Injectable.InjectCA(&obj, caBundle)
 		if err != nil {
 			return err
 		}
 
-		if err := r.Patch(ctx, obj, newApplyPatch(ac), client.ForceOwnership, fieldOwner); err != nil {
+		if err := r.Patch(ctx, &obj, newApplyPatch(ac), client.ForceOwnership, fieldOwner); err != nil {
 			return err
 		}
 	}

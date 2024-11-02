@@ -55,7 +55,6 @@ type ApplyConfiguration interface {
 
 type Injectable interface {
 	GroupVersionKind() schema.GroupVersionKind
-	GetObject() *unstructured.Unstructured
 	InjectCA(obj *unstructured.Unstructured, caBundle []byte) (ApplyConfiguration, error)
 }
 
@@ -68,12 +67,6 @@ func (i *ValidatingWebhookCaBundleInject) GroupVersionKind() schema.GroupVersion
 		Version: "v1",
 		Kind:    "ValidatingWebhookConfiguration",
 	}
-}
-
-func (i *ValidatingWebhookCaBundleInject) GetObject() *unstructured.Unstructured {
-	obj := &unstructured.Unstructured{}
-	obj.SetGroupVersionKind(i.GroupVersionKind())
-	return obj
 }
 
 func (i *ValidatingWebhookCaBundleInject) InjectCA(obj *unstructured.Unstructured, caBundle []byte) (ApplyConfiguration, error) {
@@ -143,10 +136,7 @@ func SetupWithManager(mgr controllerruntime.Manager, opts Options) error {
 		}),
 	}
 	for _, injectable := range opts.Injectables {
-		cacheByObject[injectable.GetObject()] = injectByObject
-		obj := &unstructured.Unstructured{}
-		obj.SetGroupVersionKind(injectable.GroupVersionKind())
-		cacheByObject[obj] = injectByObject
+		cacheByObject[newUnstructured(injectable)] = injectByObject
 	}
 	controllerCache, err := cache.New(mgr.GetConfig(), cache.Options{
 		HTTPClient:                  mgr.GetHTTPClient(),
@@ -194,4 +184,10 @@ func SetupWithManager(mgr controllerruntime.Manager, opts Options) error {
 
 type dynamicAuthorityController interface {
 	SetupWithManager(ctrl.Manager) error
+}
+
+func newUnstructured(injectable Injectable) *unstructured.Unstructured {
+	obj := &unstructured.Unstructured{}
+	obj.SetGroupVersionKind(injectable.GroupVersionKind())
+	return obj
 }
