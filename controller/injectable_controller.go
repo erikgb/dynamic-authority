@@ -4,8 +4,9 @@ import (
 	"context"
 	"strings"
 
-	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -30,13 +31,13 @@ func (r *InjectableReconciler) SetupWithManager(mgr ctrl.Manager) error {
 			source.Kind(
 				r.Cache,
 				r.Injectable.GetObject(),
-				handler.EnqueueRequestsFromMapFunc(func(ctx context.Context, obj client.Object) []ctrl.Request {
+				handler.TypedEnqueueRequestsFromMapFunc(func(ctx context.Context, obj *unstructured.Unstructured) []ctrl.Request {
 					return []ctrl.Request{{NamespacedName: types.NamespacedName{
 						Namespace: r.Opts.Namespace,
 						Name:      r.Opts.CASecret,
 					}}}
 				}),
-				predicate.NewPredicateFuncs(func(obj client.Object) bool {
+				predicate.NewTypedPredicateFuncs(func(obj *unstructured.Unstructured) bool {
 					return obj.GetLabels()[WantInjectFromSecretNamespaceLabel] == r.Opts.Namespace && obj.GetLabels()[WantInjectFromSecretNameLabel] == r.Opts.CASecret
 				}))).
 		Complete(r)
@@ -56,7 +57,8 @@ func (r *InjectableReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 }
 
 func (r *InjectableReconciler) reconcileInjectables(ctx context.Context, secret *corev1.Secret) error {
-	objList := &admissionregistrationv1.ValidatingWebhookConfigurationList{}
+	objList := &unstructured.UnstructuredList{}
+	objList.SetGroupVersionKind(r.Injectable.GroupVersionKind())
 	if err := r.List(ctx, objList, client.MatchingLabels(map[string]string{
 		WantInjectFromSecretNamespaceLabel: r.Opts.Namespace,
 		WantInjectFromSecretNameLabel:      r.Opts.CASecret,
@@ -66,10 +68,17 @@ func (r *InjectableReconciler) reconcileInjectables(ctx context.Context, secret 
 
 	caBundle := secret.Data[TLSCABundleKey]
 
-	for _, obj := range objList.Items {
-		ac := r.Injectable.InjectCA(&obj, caBundle)
+	for _, u := range objList.Items {
+		obj := r.Injectable.GetObject()
+		if err := runtime.DefaultUnstructuredConverter.FromUnstructured(u.Object, obj); err != nil {
+			return err
+		}
+		ac, err := r.Injectable.InjectCA(obj, caBundle)
+		if err != nil {
+			return err
+		}
 
-		if err := r.Patch(ctx, &obj, newApplyPatch(ac), client.ForceOwnership, fieldOwner); err != nil {
+		if err := r.Patch(ctx, obj, newApplyPatch(ac), client.ForceOwnership, fieldOwner); err != nil {
 			return err
 		}
 	}

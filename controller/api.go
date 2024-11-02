@@ -3,8 +3,8 @@ package controller
 import (
 	"time"
 
-	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	admissionregistrationv1ac "k8s.io/client-go/applyconfigurations/admissionregistration/v1"
@@ -55,9 +55,8 @@ type ApplyConfiguration interface {
 
 type Injectable interface {
 	GroupVersionKind() schema.GroupVersionKind
-	GetObject() client.Object
-	GetObjectList() client.ObjectList
-	InjectCA(obj client.Object, caBytes []byte) ApplyConfiguration
+	GetObject() *unstructured.Unstructured
+	InjectCA(obj *unstructured.Unstructured, caBundle []byte) (ApplyConfiguration, error)
 }
 
 type ValidatingWebhookCaBundleInject struct {
@@ -71,30 +70,33 @@ func (i *ValidatingWebhookCaBundleInject) GroupVersionKind() schema.GroupVersion
 	}
 }
 
-func (i *ValidatingWebhookCaBundleInject) GetObject() client.Object {
-	return &admissionregistrationv1.ValidatingWebhookConfiguration{}
+func (i *ValidatingWebhookCaBundleInject) GetObject() *unstructured.Unstructured {
+	obj := &unstructured.Unstructured{}
+	obj.SetGroupVersionKind(i.GroupVersionKind())
+	return obj
 }
 
-func (i *ValidatingWebhookCaBundleInject) GetObjectList() client.ObjectList {
-	return &admissionregistrationv1.ValidatingWebhookConfigurationList{}
-}
-
-func (i *ValidatingWebhookCaBundleInject) InjectCA(obj client.Object, caBundle []byte) ApplyConfiguration {
-	vwc := obj.(*admissionregistrationv1.ValidatingWebhookConfiguration)
-
-	clientConfig := admissionregistrationv1ac.WebhookClientConfig().
-		WithCABundle(caBundle...)
-
-	ac := admissionregistrationv1ac.ValidatingWebhookConfiguration(vwc.Name)
-	for _, w := range vwc.Webhooks {
+func (i *ValidatingWebhookCaBundleInject) InjectCA(obj *unstructured.Unstructured, caBundle []byte) (ApplyConfiguration, error) {
+	ac := admissionregistrationv1ac.ValidatingWebhookConfiguration(obj.GetName())
+	webhooks, _, err := unstructured.NestedSlice(obj.Object, "webhooks")
+	if err != nil {
+		return nil, err
+	}
+	for _, w := range webhooks {
+		name, _, err := unstructured.NestedString(w.(map[string]interface{}), "name")
+		if err != nil {
+			return nil, err
+		}
 		ac.WithWebhooks(
 			admissionregistrationv1ac.ValidatingWebhook().
-				WithName(w.Name).
-				WithClientConfig(clientConfig),
+				WithName(name).
+				WithClientConfig(admissionregistrationv1ac.WebhookClientConfig().
+					WithCABundle(caBundle...),
+				),
 		)
 	}
 
-	return ac
+	return ac, nil
 }
 
 var _ Injectable = &ValidatingWebhookCaBundleInject{}
@@ -142,6 +144,9 @@ func SetupWithManager(mgr controllerruntime.Manager, opts Options) error {
 	}
 	for _, injectable := range opts.Injectables {
 		cacheByObject[injectable.GetObject()] = injectByObject
+		obj := &unstructured.Unstructured{}
+		obj.SetGroupVersionKind(injectable.GroupVersionKind())
+		cacheByObject[obj] = injectByObject
 	}
 	controllerCache, err := cache.New(mgr.GetConfig(), cache.Options{
 		HTTPClient:                  mgr.GetHTTPClient(),
@@ -159,7 +164,8 @@ func SetupWithManager(mgr controllerruntime.Manager, opts Options) error {
 		Scheme:     mgr.GetScheme(),
 		Mapper:     mgr.GetRESTMapper(),
 		Cache: &client.CacheOptions{
-			Reader: controllerCache,
+			Reader:       controllerCache,
+			Unstructured: true,
 		},
 	})
 	if err != nil {
