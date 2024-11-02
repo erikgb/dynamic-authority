@@ -10,16 +10,12 @@ const (
 	fieldOwner = client.FieldOwner("cert-manager-dynamic-authority")
 )
 
-type applyConfiguration interface {
-	GetName() *string
-}
-
-func newApplyPatch(ac applyConfiguration) applyPatch {
+func newApplyPatch(ac ApplyConfiguration) applyPatch {
 	return applyPatch{ac: ac}
 }
 
 type applyPatch struct {
-	ac applyConfiguration
+	ac ApplyConfiguration
 }
 
 func (p applyPatch) Type() types.PatchType {

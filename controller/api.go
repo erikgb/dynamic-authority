@@ -6,6 +6,8 @@ import (
 	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/apimachinery/pkg/runtime/schema"
+	admissionregistrationv1ac "k8s.io/client-go/applyconfigurations/admissionregistration/v1"
 	"sigs.k8s.io/controller-runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
@@ -47,15 +49,52 @@ const (
 	RenewCertificateSecretAnnotation = "renew.cert-manager.io/requestedAt"
 )
 
+type ApplyConfiguration interface {
+	GetName() *string
+}
+
 type Injectable interface {
+	GroupVersionKind() schema.GroupVersionKind
 	GetObject() client.Object
+	GetObjectList() client.ObjectList
+	InjectCA(obj client.Object, caBytes []byte) ApplyConfiguration
 }
 
 type ValidatingWebhookCaBundleInject struct {
 }
 
+func (i *ValidatingWebhookCaBundleInject) GroupVersionKind() schema.GroupVersionKind {
+	return schema.GroupVersionKind{
+		Group:   "admissionregistration.k8s.io",
+		Version: "v1",
+		Kind:    "ValidatingWebhookConfiguration",
+	}
+}
+
 func (i *ValidatingWebhookCaBundleInject) GetObject() client.Object {
 	return &admissionregistrationv1.ValidatingWebhookConfiguration{}
+}
+
+func (i *ValidatingWebhookCaBundleInject) GetObjectList() client.ObjectList {
+	return &admissionregistrationv1.ValidatingWebhookConfigurationList{}
+}
+
+func (i *ValidatingWebhookCaBundleInject) InjectCA(obj client.Object, caBundle []byte) ApplyConfiguration {
+	vwc := obj.(*admissionregistrationv1.ValidatingWebhookConfiguration)
+
+	clientConfig := admissionregistrationv1ac.WebhookClientConfig().
+		WithCABundle(caBundle...)
+
+	ac := admissionregistrationv1ac.ValidatingWebhookConfiguration(vwc.Name)
+	for _, w := range vwc.Webhooks {
+		ac.WithWebhooks(
+			admissionregistrationv1ac.ValidatingWebhook().
+				WithName(w.Name).
+				WithClientConfig(clientConfig),
+		)
+	}
+
+	return ac
 }
 
 var _ Injectable = &ValidatingWebhookCaBundleInject{}
