@@ -47,6 +47,19 @@ const (
 	RenewCertificateSecretAnnotation = "renew.cert-manager.io/requestedAt"
 )
 
+type Injectable interface {
+	GetObject() client.Object
+}
+
+type ValidatingWebhookCaBundleInject struct {
+}
+
+func (i *ValidatingWebhookCaBundleInject) GetObject() client.Object {
+	return &admissionregistrationv1.ValidatingWebhookConfiguration{}
+}
+
+var _ Injectable = &ValidatingWebhookCaBundleInject{}
+
 type Options struct {
 	// The namespace used for certificate secrets.
 	Namespace string
@@ -65,10 +78,8 @@ type Options struct {
 	// valid for.
 	// This must be less than CADuration.
 	LeafDuration time.Duration
-}
 
-type DynamicAuthorityController interface {
-	SetupWithManager(ctrl.Manager) error
+	Injectables []Injectable
 }
 
 func SetupWithManager(mgr controllerruntime.Manager, opts Options) error {
@@ -115,9 +126,11 @@ func SetupWithManager(mgr controllerruntime.Manager, opts Options) error {
 		Cache:  controllerCache,
 		Opts:   opts,
 	}
-	controllers := []DynamicAuthorityController{
+	controllers := []dynamicAuthorityController{
 		&CASecretReconciler{reconciler: r},
-		&InjectableReconciler{reconciler: r},
+	}
+	for _, injectable := range opts.Injectables {
+		controllers = append(controllers, &InjectableReconciler{reconciler: r, Injectable: injectable})
 	}
 	for _, c := range controllers {
 		if err := c.SetupWithManager(mgr); err != nil {
@@ -126,4 +139,8 @@ func SetupWithManager(mgr controllerruntime.Manager, opts Options) error {
 	}
 
 	return nil
+}
+
+type dynamicAuthorityController interface {
+	SetupWithManager(ctrl.Manager) error
 }

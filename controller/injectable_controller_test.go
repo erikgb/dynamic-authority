@@ -54,7 +54,9 @@ var _ = Describe("Injectable Controller", Ordered, func() {
 				Opts: Options{
 					Namespace: caSecretRef.Namespace,
 					CASecret:  caSecretRef.Name,
-				}}}
+				}},
+			Injectable: &ValidatingWebhookCaBundleInject{},
+		}
 		Expect(controller.SetupWithManager(k8sManager)).To(Succeed())
 
 		go func() {

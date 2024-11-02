@@ -18,6 +18,7 @@ import (
 // InjectableReconciler injects CA bundle into resources
 type InjectableReconciler struct {
 	reconciler
+	Injectable Injectable
 }
 
 // SetupWithManager sets up the controllers with the Manager.
@@ -28,14 +29,14 @@ func (r *InjectableReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		WatchesRawSource(
 			source.Kind(
 				r.Cache,
-				&admissionregistrationv1.ValidatingWebhookConfiguration{},
-				handler.TypedEnqueueRequestsFromMapFunc(func(ctx context.Context, obj *admissionregistrationv1.ValidatingWebhookConfiguration) []ctrl.Request {
+				r.Injectable.GetObject(),
+				handler.EnqueueRequestsFromMapFunc(func(ctx context.Context, obj client.Object) []ctrl.Request {
 					return []ctrl.Request{{NamespacedName: types.NamespacedName{
 						Namespace: r.Opts.Namespace,
 						Name:      r.Opts.CASecret,
 					}}}
 				}),
-				predicate.NewTypedPredicateFuncs[*admissionregistrationv1.ValidatingWebhookConfiguration](func(obj *admissionregistrationv1.ValidatingWebhookConfiguration) bool {
+				predicate.NewPredicateFuncs(func(obj client.Object) bool {
 					return obj.GetLabels()[WantInjectFromSecretNamespaceLabel] == r.Opts.Namespace && obj.GetLabels()[WantInjectFromSecretNameLabel] == r.Opts.CASecret
 				}))).
 		Complete(r)

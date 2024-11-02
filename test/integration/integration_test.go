@@ -39,6 +39,9 @@ var _ = Describe("Controller Integration Test", Ordered, func() {
 		opts := controller.Options{
 			Namespace: caSecretRef.Namespace,
 			CASecret:  caSecretRef.Name,
+			Injectables: []controller.Injectable{
+				&controller.ValidatingWebhookCaBundleInject{},
+			},
 		}
 		Expect(controller.SetupWithManager(k8sManager, opts)).To(Succeed())
 
