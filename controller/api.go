@@ -70,6 +70,8 @@ func (i *ValidatingWebhookCaBundleInject) GroupVersionKind() schema.GroupVersion
 }
 
 func (i *ValidatingWebhookCaBundleInject) InjectCA(obj *unstructured.Unstructured, caBundle []byte) (ApplyConfiguration, error) {
+	// TODO: Can we generalize this function for any resource based on a JSON path?
+
 	ac := admissionregistrationv1ac.ValidatingWebhookConfiguration(obj.GetName())
 
 	webhooks, _, err := unstructured.NestedSlice(obj.Object, "webhooks")
