@@ -71,6 +71,7 @@ func (i *ValidatingWebhookCaBundleInject) GroupVersionKind() schema.GroupVersion
 
 func (i *ValidatingWebhookCaBundleInject) InjectCA(obj *unstructured.Unstructured, caBundle []byte) (ApplyConfiguration, error) {
 	ac := admissionregistrationv1ac.ValidatingWebhookConfiguration(obj.GetName())
+
 	webhooks, _, err := unstructured.NestedSlice(obj.Object, "webhooks")
 	if err != nil {
 		return nil, err
