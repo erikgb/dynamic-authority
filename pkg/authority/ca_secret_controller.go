@@ -26,16 +26,19 @@ import (
 // CASecretReconciler reconciles a CA Secret object
 type CASecretReconciler struct {
 	reconciler
-	events chan event.GenericEvent
+	events chan event.TypedGenericEvent[*corev1.Secret]
 }
 
 // +kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch;create;patch
 
 // SetupWithManager sets up the controller with the Manager.
 func (r *CASecretReconciler) SetupWithManager(mgr ctrl.Manager) error {
-	r.events = make(chan event.GenericEvent)
+	r.events = make(chan event.TypedGenericEvent[*corev1.Secret])
 	go func() {
-		r.events <- event.GenericEvent{}
+		obj := &corev1.Secret{}
+		obj.Namespace = r.Opts.Namespace
+		obj.Name = r.Opts.CASecret
+		r.events <- event.TypedGenericEvent[*corev1.Secret]{Object: obj}
 	}()
 
 	return ctrl.NewControllerManagedBy(mgr).
@@ -44,13 +47,7 @@ func (r *CASecretReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		WatchesRawSource(
 			source.Channel(
 				r.events,
-				handler.EnqueueRequestsFromMapFunc(func(context.Context, client.Object) []ctrl.Request {
-					req := ctrl.Request{}
-					req.Namespace = r.Opts.Namespace
-					req.Name = r.Opts.CASecret
-					return []ctrl.Request{req}
-				}),
-			),
+				&handler.TypedEnqueueRequestForObject[*corev1.Secret]{}),
 		).
 		Complete(r)
 }
@@ -59,15 +56,15 @@ func (r *CASecretReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 	return ctrl.Result{}, r.reconcileSecret(ctx, req.NamespacedName)
 }
 
-func (r *CASecretReconciler) reconcileSecret(ctx context.Context, name types.NamespacedName) error {
+func (r *CASecretReconciler) reconcileSecret(ctx context.Context, namespacedName types.NamespacedName) error {
 	secret := &corev1.Secret{}
-	if err := r.Get(ctx, name, secret); err != nil {
+	if err := r.Get(ctx, namespacedName, secret); err != nil {
 		if !errors.IsNotFound(err) {
 			return err
 		}
 		// Secret does not exist - let's create it
-		secret.Namespace = name.Namespace
-		secret.Name = name.Name
+		secret.Namespace = namespacedName.Namespace
+		secret.Name = namespacedName.Name
 	}
 
 	generate, cert, pk := r.needsGenerate(secret)
