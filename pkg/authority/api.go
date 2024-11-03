@@ -3,7 +3,6 @@ package authority
 import (
 	"crypto/tls"
 	"errors"
-	"sigs.k8s.io/controller-runtime/pkg/webhook"
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
@@ -106,9 +105,6 @@ type Options struct {
 	// The name of the Secret used to store CA certificates.
 	CASecret string
 
-	// The name of the Secret used to store leaf certificates.
-	LeafSecret string
-
 	// The amount of time the root CA certificate will be valid for.
 	// This must be greater than LeafDuration.
 	CADuration time.Duration
@@ -127,23 +123,33 @@ func (opts Options) caSecretPredicate() predicate.TypedFuncs[*corev1.Secret] {
 	})
 }
 
+type ServingCertificateOperator struct {
+	Options        Options
+	leafCertHolder *CertificateHolder
+}
+
+func (o *ServingCertificateOperator) ServingCertificate() func(config *tls.Config) {
+	if o.leafCertHolder == nil {
+		o.leafCertHolder = &CertificateHolder{}
+	}
+	return func(config *tls.Config) {
+		config.GetCertificate = func(info *tls.ClientHelloInfo) (*tls.Certificate, error) {
+			return o.leafCertHolder.GetCertificate(info)
+		}
+	}
+}
+
 // +kubebuilder:rbac:groups=admissionregistration.k8s.io,resources=validatingwebhookconfigurations,verbs=get;list;watch;patch
 
-func SetupWithManager(mgr controllerruntime.Manager, opts Options, webhookOpts *webhook.Options) error {
-	if webhookOpts == nil {
-		return errors.New("supplied webhook options must be non-nil")
+func (o *ServingCertificateOperator) SetupWithManager(mgr controllerruntime.Manager) error {
+	if o.leafCertHolder == nil {
+		return errors.New("ServingCertificate not invoked")
 	}
-	leafCertHolder := &CertificateHolder{}
-	webhookOpts.TLSOpts = append(webhookOpts.TLSOpts, func(config *tls.Config) {
-		config.GetCertificate = func(info *tls.ClientHelloInfo) (*tls.Certificate, error) {
-			return leafCertHolder.GetCertificate(info)
-		}
-	})
 
 	cacheByObject := map[client.Object]cache.ByObject{
 		&corev1.Secret{}: {
 			Namespaces: map[string]cache.Config{
-				opts.Namespace: {},
+				o.Options.Namespace: {},
 			},
 			Label: labels.SelectorFromSet(labels.Set{
 				DynamicAuthoritySecretLabel: "true",
@@ -152,11 +158,11 @@ func SetupWithManager(mgr controllerruntime.Manager, opts Options, webhookOpts *
 	}
 	injectByObject := cache.ByObject{
 		Label: labels.SelectorFromSet(labels.Set{
-			WantInjectFromSecretNamespaceLabel: opts.Namespace,
-			WantInjectFromSecretNameLabel:      opts.CASecret,
+			WantInjectFromSecretNamespaceLabel: o.Options.Namespace,
+			WantInjectFromSecretNameLabel:      o.Options.CASecret,
 		}),
 	}
-	for _, injectable := range opts.Injectables {
+	for _, injectable := range o.Options.Injectables {
 		cacheByObject[newUnstructured(injectable)] = injectByObject
 	}
 	controllerCache, err := cache.New(mgr.GetConfig(), cache.Options{
@@ -186,12 +192,12 @@ func SetupWithManager(mgr controllerruntime.Manager, opts Options, webhookOpts *
 	r := reconciler{
 		Client: controllerClient,
 		Cache:  controllerCache,
-		Opts:   opts,
+		Opts:   o.Options,
 	}
 	controllers := []dynamicAuthorityController{
 		&CASecretReconciler{reconciler: r},
 	}
-	for _, injectable := range opts.Injectables {
+	for _, injectable := range o.Options.Injectables {
 		controllers = append(controllers, &InjectableReconciler{reconciler: r, Injectable: injectable})
 	}
 	for _, c := range controllers {

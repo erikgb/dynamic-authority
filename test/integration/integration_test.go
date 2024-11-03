@@ -1,6 +1,7 @@
 package controller
 
 import (
+	"crypto/tls"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
@@ -30,22 +31,31 @@ var _ = Describe("Controller Integration Test", Ordered, func() {
 			Name:      "ca-cert",
 		}
 
+		operator := &authority.ServingCertificateOperator{
+			Options: authority.Options{
+				Namespace: caSecretRef.Namespace,
+				CASecret:  caSecretRef.Name,
+				Injectables: []authority.Injectable{
+					&authority.ValidatingWebhookCaBundleInject{},
+				},
+			},
+		}
+
+		webhookInstallOptions := &testEnv.WebhookInstallOptions
 		k8sManager, err := ctrl.NewManager(cfg, ctrl.Options{
 			Scheme: scheme.Scheme,
 			Metrics: metricsserver.Options{
 				BindAddress: "0",
 			},
+			WebhookServer: webhook.NewServer(webhook.Options{
+				Host:    webhookInstallOptions.LocalServingHost,
+				Port:    webhookInstallOptions.LocalServingPort,
+				TLSOpts: []func(*tls.Config){operator.ServingCertificate()},
+			}),
 		})
 		Expect(err).ToNot(HaveOccurred())
 
-		opts := authority.Options{
-			Namespace: caSecretRef.Namespace,
-			CASecret:  caSecretRef.Name,
-			Injectables: []authority.Injectable{
-				&authority.ValidatingWebhookCaBundleInject{},
-			},
-		}
-		Expect(authority.SetupWithManager(k8sManager, opts, &webhook.Options{})).To(Succeed())
+		Expect(operator.SetupWithManager(k8sManager)).To(Succeed())
 
 		go func() {
 			defer GinkgoRecover()
