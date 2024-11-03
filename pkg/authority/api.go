@@ -10,7 +10,6 @@ import (
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	admissionregistrationv1ac "k8s.io/client-go/applyconfigurations/admissionregistration/v1"
-	"sigs.k8s.io/controller-runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -142,7 +141,7 @@ func (o *ServingCertificateOperator) ServingCertificate() func(config *tls.Confi
 
 // +kubebuilder:rbac:groups=admissionregistration.k8s.io,resources=validatingwebhookconfigurations,verbs=get;list;watch;patch
 
-func (o *ServingCertificateOperator) SetupWithManager(mgr controllerruntime.Manager) error {
+func (o *ServingCertificateOperator) SetupWithManager(mgr ctrl.Manager) error {
 	if o.certificateHolder == nil {
 		return errors.New("ServingCertificate not invoked")
 	}
@@ -197,6 +196,7 @@ func (o *ServingCertificateOperator) SetupWithManager(mgr controllerruntime.Mana
 	}
 	controllers := []dynamicAuthorityController{
 		&CASecretReconciler{reconciler: r},
+		&LeafCertReconciler{reconciler: r, certificateHolder: o.certificateHolder},
 	}
 	for _, injectable := range o.Options.Injectables {
 		controllers = append(controllers, &InjectableReconciler{reconciler: r, Injectable: injectable})
