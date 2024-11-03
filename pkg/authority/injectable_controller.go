@@ -37,9 +37,7 @@ func (r *InjectableReconciler) SetupWithManager(mgr ctrl.Manager) error {
 						obj.GetLabels()[WantInjectFromSecretNameLabel] == r.Opts.CASecret
 				}))).
 		WatchesRawSource(
-			source.Kind(
-				r.Cache,
-				&corev1.Secret{},
+			r.caSecretSource(
 				handler.TypedEnqueueRequestsFromMapFunc(func(ctx context.Context, _ *corev1.Secret) []reconcile.Request {
 					objList := newUnstructuredList(r.Injectable)
 					if err := r.List(ctx, objList, client.MatchingLabels(map[string]string{
@@ -58,8 +56,7 @@ func (r *InjectableReconciler) SetupWithManager(mgr ctrl.Manager) error {
 						requests = append(requests, req)
 					}
 					return requests
-				}),
-				r.Opts.caSecretPredicate())).
+				}))).
 		Complete(r)
 }
 

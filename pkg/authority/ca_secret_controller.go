@@ -43,7 +43,7 @@ func (r *CASecretReconciler) SetupWithManager(mgr ctrl.Manager) error {
 
 	return ctrl.NewControllerManagedBy(mgr).
 		Named("cert_ca_secret").
-		WatchesRawSource(r.secretSource(r.Opts.caSecretPredicate())).
+		WatchesRawSource(r.caSecretSource(&handler.TypedEnqueueRequestForObject[*corev1.Secret]{})).
 		WatchesRawSource(
 			source.Channel(
 				r.events,
