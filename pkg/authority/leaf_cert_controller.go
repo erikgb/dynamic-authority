@@ -2,8 +2,10 @@ package authority
 
 import (
 	"context"
+	"crypto/tls"
 
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/utils/ptr"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
@@ -29,5 +31,23 @@ func (r *LeafCertReconciler) SetupWithManager(mgr ctrl.Manager) error {
 }
 
 func (r *LeafCertReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	return ctrl.Result{}, nil
+	return ctrl.Result{}, r.reconcileSecret(ctx, req)
+}
+
+func (r *LeafCertReconciler) reconcileSecret(ctx context.Context, req ctrl.Request) error {
+	caSecret := &corev1.Secret{}
+	if err := r.Get(ctx, req.NamespacedName, caSecret); err != nil {
+		if errors.IsNotFound(err) {
+			return nil
+		}
+		return err
+	}
+
+	certificate, err := tls.X509KeyPair(caSecret.Data[corev1.TLSCertKey], caSecret.Data[corev1.TLSPrivateKeyKey])
+	if err != nil {
+		return err
+	}
+
+	r.certificateHolder.SetCertificate(&certificate)
+	return nil
 }

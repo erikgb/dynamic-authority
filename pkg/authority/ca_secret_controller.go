@@ -11,7 +11,6 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/types"
 	corev1ac "k8s.io/client-go/applyconfigurations/core/v1"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -53,25 +52,25 @@ func (r *CASecretReconciler) SetupWithManager(mgr ctrl.Manager) error {
 }
 
 func (r *CASecretReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	return ctrl.Result{}, r.reconcileSecret(ctx, req.NamespacedName)
+	return ctrl.Result{}, r.reconcileSecret(ctx, req)
 }
 
-func (r *CASecretReconciler) reconcileSecret(ctx context.Context, namespacedName types.NamespacedName) error {
+func (r *CASecretReconciler) reconcileSecret(ctx context.Context, req ctrl.Request) error {
 	secret := &corev1.Secret{}
-	if err := r.Get(ctx, namespacedName, secret); err != nil {
+	if err := r.Get(ctx, req.NamespacedName, secret); err != nil {
 		if !errors.IsNotFound(err) {
 			return err
 		}
 		// Secret does not exist - let's create it
-		secret.Namespace = namespacedName.Namespace
-		secret.Name = namespacedName.Name
+		secret.Namespace = req.Namespace
+		secret.Name = req.Name
 	}
 
 	generate, cert, pk := r.needsGenerate(secret)
 
 	if generate || secret.Annotations[RenewCertificateSecretAnnotation] != secret.Annotations[RenewHandledCertificateSecretAnnotation] {
 		var err error
-		cert, pk, err = r.generateCA()
+		cert, pk, err = generateCA(r.Opts)
 		if err != nil {
 			return err
 		}
@@ -152,13 +151,13 @@ func (r *CASecretReconciler) needsGenerate(secret *corev1.Secret) (bool, *x509.C
 var serialNumberLimit = new(big.Int).Lsh(big.NewInt(1), 128)
 
 // generateCA will regenerate a new CA.
-func (r *CASecretReconciler) generateCA() (*x509.Certificate, crypto.Signer, error) {
+func generateCA(opts Options) (*x509.Certificate, crypto.Signer, error) {
 	pk, err := pki.GenerateECPrivateKey(384)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	duration := r.Opts.CADuration
+	duration := opts.CADuration
 	if duration == 0 {
 		duration = 7 * 24 * time.Hour
 	}
