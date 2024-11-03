@@ -19,6 +19,7 @@ import (
 var _ = Describe("Controller Integration Test", Ordered, func() {
 	var (
 		caSecretRef types.NamespacedName
+		tlsConfig   *tls.Config
 	)
 
 	BeforeAll(func() {
@@ -41,6 +42,12 @@ var _ = Describe("Controller Integration Test", Ordered, func() {
 			},
 		}
 
+		servingCertificate := operator.ServingCertificate()
+
+		tlsConfig = &tls.Config{}
+		servingCertificate(tlsConfig)
+		Expect(tlsConfig.GetCertificate).ToNot(BeNil())
+
 		webhookInstallOptions := &testEnv.WebhookInstallOptions
 		k8sManager, err := ctrl.NewManager(cfg, ctrl.Options{
 			Scheme: scheme.Scheme,
@@ -50,7 +57,7 @@ var _ = Describe("Controller Integration Test", Ordered, func() {
 			WebhookServer: webhook.NewServer(webhook.Options{
 				Host:    webhookInstallOptions.LocalServingHost,
 				Port:    webhookInstallOptions.LocalServingPort,
-				TLSOpts: []func(*tls.Config){operator.ServingCertificate()},
+				TLSOpts: []func(*tls.Config){servingCertificate},
 			}),
 		})
 		Expect(err).ToNot(HaveOccurred())
@@ -73,5 +80,11 @@ var _ = Describe("Controller Integration Test", Ordered, func() {
 				HaveField("ClientConfig.CABundle", Not(BeEmpty())),
 			)),
 		)
+	})
+
+	It("should set serving certificate", func() {
+		Eventually(func() (*tls.Certificate, error) {
+			return tlsConfig.GetCertificate(nil)
+		}).ShouldNot(BeNil())
 	})
 })
