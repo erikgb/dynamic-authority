@@ -3,6 +3,7 @@ package authority
 import (
 	"context"
 	"crypto/tls"
+	"crypto/x509"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -10,6 +11,8 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
+
+	"github.com/erikgb/dynamic-authority/internal/pki"
 )
 
 // LeafCertReconciler reconciles the leaf/serving certificate
@@ -42,12 +45,44 @@ func (r *LeafCertReconciler) reconcileSecret(ctx context.Context, req ctrl.Reque
 		}
 		return err
 	}
+	caCertBytes := caSecret.Data[corev1.TLSCertKey]
+	caPkBytes := caSecret.Data[corev1.TLSPrivateKeyKey]
 
-	certificate, err := tls.X509KeyPair(caSecret.Data[corev1.TLSCertKey], caSecret.Data[corev1.TLSPrivateKeyKey])
+	pk, err := pki.GenerateECPrivateKey(384)
 	if err != nil {
 		return err
 	}
 
-	r.certificateHolder.SetCertificate(&certificate)
+	// create the certificate template to be signed
+	template := &x509.Certificate{
+		Version:            3,
+		PublicKeyAlgorithm: x509.ECDSA,
+		PublicKey:          pk.Public(),
+		DNSNames:           r.Opts.DNSNames,
+		KeyUsage:           x509.KeyUsageDigitalSignature | x509.KeyUsageKeyEncipherment,
+		ExtKeyUsage:        []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
+	}
+
+	cert, err := Sign(r.Opts, template, caCertBytes, caPkBytes)
+	if err != nil {
+		return err
+	}
+
+	pkData, err := pki.EncodePrivateKey(pk)
+	if err != nil {
+		return err
+	}
+
+	certData, err := pki.EncodeX509(cert)
+	if err != nil {
+		return err
+	}
+
+	tlsCert, err := tls.X509KeyPair(certData, pkData)
+	if err != nil {
+		return err
+	}
+
+	r.certificateHolder.SetCertificate(&tlsCert)
 	return nil
 }

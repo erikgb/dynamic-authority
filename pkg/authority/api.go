@@ -107,6 +107,8 @@ type Options struct {
 	// This must be greater than LeafDuration.
 	CADuration time.Duration
 
+	DNSNames []string
+
 	// The amount of time leaf certificates signed by this authority will be
 	// valid for.
 	// This must be less than CADuration.
