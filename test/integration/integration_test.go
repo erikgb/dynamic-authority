@@ -3,6 +3,7 @@ package controller
 import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"sigs.k8s.io/controller-runtime/pkg/webhook"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -44,7 +45,7 @@ var _ = Describe("Controller Integration Test", Ordered, func() {
 				&authority.ValidatingWebhookCaBundleInject{},
 			},
 		}
-		Expect(authority.SetupWithManager(k8sManager, opts)).To(Succeed())
+		Expect(authority.SetupWithManager(k8sManager, opts, &webhook.Options{})).To(Succeed())
 
 		go func() {
 			defer GinkgoRecover()

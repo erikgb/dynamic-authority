@@ -1,6 +1,9 @@
 package authority
 
 import (
+	"crypto/tls"
+	"errors"
+	"sigs.k8s.io/controller-runtime/pkg/webhook"
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
@@ -126,7 +129,17 @@ func (opts Options) caSecretPredicate() predicate.TypedFuncs[*corev1.Secret] {
 
 // +kubebuilder:rbac:groups=admissionregistration.k8s.io,resources=validatingwebhookconfigurations,verbs=get;list;watch;patch
 
-func SetupWithManager(mgr controllerruntime.Manager, opts Options) error {
+func SetupWithManager(mgr controllerruntime.Manager, opts Options, webhookOpts *webhook.Options) error {
+	if webhookOpts == nil {
+		return errors.New("supplied webhook options must be non-nil")
+	}
+	leafCertHolder := &CertificateHolder{}
+	webhookOpts.TLSOpts = append(webhookOpts.TLSOpts, func(config *tls.Config) {
+		config.GetCertificate = func(info *tls.ClientHelloInfo) (*tls.Certificate, error) {
+			return leafCertHolder.GetCertificate(info)
+		}
+	})
+
 	cacheByObject := map[client.Object]cache.ByObject{
 		&corev1.Secret{}: {
 			Namespaces: map[string]cache.Config{
