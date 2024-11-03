@@ -124,17 +124,18 @@ func (opts Options) caSecretPredicate() predicate.TypedFuncs[*corev1.Secret] {
 }
 
 type ServingCertificateOperator struct {
-	Options        Options
-	leafCertHolder *CertificateHolder
+	Options Options
+
+	certificateHolder *CertificateHolder
 }
 
 func (o *ServingCertificateOperator) ServingCertificate() func(config *tls.Config) {
-	if o.leafCertHolder == nil {
-		o.leafCertHolder = &CertificateHolder{}
+	if o.certificateHolder == nil {
+		o.certificateHolder = &CertificateHolder{}
 	}
 	return func(config *tls.Config) {
 		config.GetCertificate = func(info *tls.ClientHelloInfo) (*tls.Certificate, error) {
-			return o.leafCertHolder.GetCertificate(info)
+			return o.certificateHolder.GetCertificate(info)
 		}
 	}
 }
@@ -142,7 +143,7 @@ func (o *ServingCertificateOperator) ServingCertificate() func(config *tls.Confi
 // +kubebuilder:rbac:groups=admissionregistration.k8s.io,resources=validatingwebhookconfigurations,verbs=get;list;watch;patch
 
 func (o *ServingCertificateOperator) SetupWithManager(mgr controllerruntime.Manager) error {
-	if o.leafCertHolder == nil {
+	if o.certificateHolder == nil {
 		return errors.New("ServingCertificate not invoked")
 	}
 
