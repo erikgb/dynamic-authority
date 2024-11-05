@@ -36,9 +36,6 @@ var _ = Describe("Controller Integration Test", Ordered, func() {
 			Options: authority.Options{
 				Namespace: caSecretRef.Namespace,
 				CASecret:  caSecretRef.Name,
-				Injectables: []authority.Injectable{
-					&authority.ValidatingWebhookCaBundleInject{},
-				},
 			},
 		}
 

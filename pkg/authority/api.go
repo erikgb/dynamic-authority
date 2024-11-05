@@ -147,6 +147,11 @@ func (o *ServingCertificateOperator) SetupWithManager(mgr ctrl.Manager) error {
 	if o.Options.LeafDuration == 0 {
 		o.Options.LeafDuration = 1 * 24 * time.Hour
 	}
+	if len(o.Options.Injectables) == 0 {
+		o.Options.Injectables = []Injectable{
+			&ValidatingWebhookCaBundleInject{},
+		}
+	}
 
 	cacheByObject := map[client.Object]cache.ByObject{
 		&corev1.Secret{}: {
