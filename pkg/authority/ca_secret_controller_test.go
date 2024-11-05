@@ -45,8 +45,9 @@ var _ = Describe("CA Secret Controller", Ordered, func() {
 				Client: k8sManager.GetClient(),
 				Cache:  k8sManager.GetCache(),
 				Opts: Options{
-					Namespace: caSecretRef.Namespace,
-					CASecret:  caSecretRef.Name,
+					Namespace:  caSecretRef.Namespace,
+					CASecret:   caSecretRef.Name,
+					CADuration: 7 * time.Hour,
 				}}}
 		Expect(controller.SetupWithManager(k8sManager)).To(Succeed())
 

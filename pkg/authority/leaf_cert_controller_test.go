@@ -25,9 +25,10 @@ var _ = Describe("Leaf Certificate Controller", Ordered, func() {
 
 	BeforeAll(func() {
 		opts := Options{
-			Namespace:  "leaf-cert-controller",
-			CASecret:   "ca-cert",
-			CADuration: 7 * 24 * time.Hour,
+			Namespace:    "leaf-cert-controller",
+			CASecret:     "ca-cert",
+			CADuration:   7 * time.Hour,
+			LeafDuration: 1 * time.Hour,
 		}
 
 		ns := &corev1.Namespace{}

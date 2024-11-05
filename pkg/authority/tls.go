@@ -72,11 +72,6 @@ func generateCA(opts Options) (*x509.Certificate, crypto.Signer, error) {
 		return nil, nil, err
 	}
 
-	duration := opts.CADuration
-	if duration == 0 {
-		duration = 7 * 24 * time.Hour
-	}
-
 	serialNumber, err := rand.Int(rand.Reader, serialNumberLimit)
 	if err != nil {
 		return nil, nil, err
@@ -91,7 +86,7 @@ func generateCA(opts Options) (*x509.Certificate, crypto.Signer, error) {
 		},
 		IsCA:      true,
 		NotBefore: time.Now(),
-		NotAfter:  time.Now().Add(duration),
+		NotAfter:  time.Now().Add(opts.CADuration),
 		KeyUsage:  x509.KeyUsageDigitalSignature | x509.KeyUsageKeyEncipherment | x509.KeyUsageCertSign,
 	}
 	// self sign the root CA

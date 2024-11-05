@@ -141,6 +141,13 @@ func (o *ServingCertificateOperator) SetupWithManager(mgr ctrl.Manager) error {
 		return errors.New("ServingCertificate not invoked")
 	}
 
+	if o.Options.CADuration == 0 {
+		o.Options.CADuration = 7 * 24 * time.Hour
+	}
+	if o.Options.LeafDuration == 0 {
+		o.Options.LeafDuration = 1 * 24 * time.Hour
+	}
+
 	cacheByObject := map[client.Object]cache.ByObject{
 		&corev1.Secret{}: {
 			Namespaces: map[string]cache.Config{
